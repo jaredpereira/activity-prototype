@@ -1,8 +1,10 @@
 import type { NextPage } from "next";
 import { useEffect, useRef, useState } from "react";
-import { ReadonlyJSONValue, Replicache } from "replicache";
+import { ReadonlyJSONValue, Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
 import { MyPullResponse } from "../backend";
+import { Mutations } from "../backend/mutations";
+import { ulid } from "ulid";
 
 type Fact = {
   entity: string;
@@ -10,22 +12,45 @@ type Fact = {
   value: string;
 };
 
+const processFact = (f: Fact) => {
+  let indexes: { eav: string; ave?: string; vae?: string } = {
+    eav: `${f.entity}-${f.attribute}`,
+  };
+  indexes.ave = `${f.attribute}-${f.value}`;
+  indexes.vae = "";
+  return { ...f, indexes };
+};
+
+type ReplicacheMutators = {
+  [k in keyof typeof Mutations]: (
+    tx: WriteTransaction,
+    args: Parameters<typeof Mutations[k]>[1]
+  ) => Promise<void>;
+};
+
+let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
+  acc[k] = (tx: WriteTransaction, args: any) =>
+    Mutations[k as keyof typeof Mutations](async (f: Fact) => {
+      await tx.put(`ea-${f.entity}-${f.attribute}`, processFact(f));
+    }, args);
+
+  return acc;
+}, {} as any);
+
 const rep = new Replicache({
   name: "test-db1",
-  schemaVersion: `0`,
+  schemaVersion: `2`,
   pushDelay: 500,
   pullURL: "https://activity-prototype.awarm.workers.dev/pull",
   pushURL: "https://activity-prototype.awarm.workers.dev/push",
   puller: async (req) => {
     let res = await fetch(req);
     let data: MyPullResponse = await res.json();
-    console.log("what is happening here? ", data);
-    let ops = data.data.map((f) => {
-      let fact = f[1];
+    let ops = data.data.map((fact) => {
       return {
         op: "put",
         key: `ea-${fact.entity}-${fact.attribute}`,
-        value: fact.value,
+        value: processFact(fact),
       } as const;
     });
     return {
@@ -37,12 +62,10 @@ const rep = new Replicache({
       },
     };
   },
-  mutators: {
-    assertFact: async (tx, args: Fact) => {
-      await tx.put(`ea-${args.entity}-${args.attribute}`, args.value);
-    },
-  },
+  mutators,
 });
+
+rep.createIndex({ name: `aev`, jsonPointer: `/indexes/aev` });
 
 const Home: NextPage = () => {
   let socket = useRef<WebSocket>();
@@ -72,32 +95,20 @@ const Home: NextPage = () => {
 };
 
 function NewFact() {
-  let [state, setState] = useState({ entity: "", attribute: "", value: "" });
+  let [state, setState] = useState({ title: "" });
   return (
     <div
       className="grid gap-1"
       style={{ gridTemplateColumns: "min-content auto" }}
     >
-      entity:{" "}
+      {"title: "}
       <input
-        value={state.entity}
-        onChange={(e) => setState({ ...state, entity: e.currentTarget.value })}
-      />
-      attribute:{" "}
-      <input
-        value={state.attribute}
-        onChange={(e) =>
-          setState({ ...state, attribute: e.currentTarget.value })
-        }
-      />
-      value:{" "}
-      <input
-        value={state.value}
-        onChange={(e) => setState({ ...state, value: e.currentTarget.value })}
+        value={state.title}
+        onChange={(e) => setState({ ...state, title: e.currentTarget.value })}
       />
       <button
         onClick={() => {
-          rep.mutate.assertFact(state);
+          rep.mutate.createNewCard({ title: state.title, entity: ulid() });
         }}
       >
         mutate!

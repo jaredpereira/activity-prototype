@@ -1,4 +1,6 @@
 import { PullRequest, PullResponse, PushRequest } from "replicache";
+import { ulid } from "../src/ulid";
+import { Mutations } from "./mutations";
 
 export default {
   fetch: handleRequest,
@@ -48,22 +50,27 @@ function handleOptions(request: Request) {
 }
 
 type Cookie = {
-  time: string;
+  lastUpdated: string;
 };
 
 export type Fact = {
+  id: string;
+  lastUpdated: string;
   entity: string;
   attribute: string;
   value: string;
 };
 
+type FactInput = Omit<Fact, "lastUpdated" | "id">;
+
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
-  data: [string, Fact][];
+  cookie?: Cookie;
+  data: Fact[];
 };
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 1;
+  version = 3;
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
       let lastVersion = (await this.state.storage.get("meta-lastVersion")) || 0;
@@ -107,14 +114,14 @@ export class Counter implements DurableObject {
       )) || 0;
 
     let map = await this.state.storage.list<Fact>({
-      start: `tea-${cookie?.time || ""}`,
+      start: `tea-${cookie?.lastUpdated || ""}`,
     });
-    let updates = [...map];
+    let updates = [...map.values()].slice(-1);
 
-    let lastKey = updates[updates.length - 1]?.[0];
-    let newCookie = !lastKey
+    let lastKey = updates[updates.length - 1];
+    let newCookie: Cookie | undefined = !lastKey
       ? undefined
-      : { time: lastKey.slice(4, 4 + lastKey.slice(4).indexOf("-")) };
+      : { lastUpdated: lastKey.lastUpdated };
     let response: MyPullResponse = {
       cookie: newCookie,
       lastMutationID,
@@ -128,41 +135,63 @@ export class Counter implements DurableObject {
     });
   }
 
+  async assertFact(fact: FactInput) {
+    let lastUpdated = Date.now().toString();
+    let existingValue = await this.state.storage.get<Fact & { time: string }>(
+      `ea-${fact.entity}-${fact.attribute}`
+    );
+    let newData: Fact = {
+      ...fact,
+      // If we don't have an existing value generate a new unique id for this
+      // fact. When we have cardinality many attributes this will need to be
+      // handled differently
+      id: existingValue?.id || ulid(),
+      lastUpdated,
+    };
+    this.state.storage.put(
+      `ea-${newData.entity}-${newData.attribute}`,
+      newData
+    );
+    this.state.storage.put(`ti-${lastUpdated}-${newData.id}`, newData);
+    if (existingValue) {
+      // We don't technically need to delete this but might as well!
+      this.state.storage.delete(
+        `tea-${existingValue.time}-${existingValue.id}`
+      );
+    }
+  }
+
   async push(request: Request) {
     let data: PushRequest = await request.json();
-    this.state.storage.transaction(async (tx) => {
-      let lastMutationID =
-        (await tx.get<number>(`lastMutationID-${data.clientID}`)) || 0;
-      for (let i = 0; i < data.mutations.length; i++) {
-        let time = Date.now();
-        let m = data.mutations[i];
-        if (m.id !== lastMutationID + 1) return;
-        switch (m.name) {
-          case "assertFact": {
-            let fact = m.args as Fact;
-            let existingValue = await this.state.storage.get<
-              Fact & { time: string }
-            >(`ea-${fact.entity}-${fact.attribute}`);
-            await tx.put(`ea-${fact.entity}-${fact.attribute}`, {
-              ...fact,
-              time,
-            });
-            await tx.put(`tea-${time}-${fact.entity}-${fact.attribute}`, fact);
-            if (existingValue) {
-              await tx.delete(
-                `tea-${existingValue.time}-${fact.entity}-${fact.attribute}`
-              );
-            }
-            break;
-          }
-          default: {
-            return new Response("Unknown mutation type", { status: 400 });
-          }
-        }
-        lastMutationID = m.id;
+    let lastMutationID =
+      (await this.state.storage.get<number>(
+        `lastMutationID-${data.clientID}`
+      )) || 0;
+    for (let i = 0; i < data.mutations.length; i++) {
+      let m = data.mutations[i];
+      if (m.id !== lastMutationID + 1) continue;
+
+      let name = m.name as keyof typeof Mutations;
+
+      if (!Mutations[name]) {
+        console.log(`Unknown mutation: ${name}`);
+        return new Response(`Unknown mutation: ${name}`, { status: 400 });
       }
-      tx.put<number>(`lastMutationID-${data.clientID}`, lastMutationID);
-    });
+
+      try {
+        await Mutations[name](this.assertFact.bind(this), m.args as any);
+        this.state.storage.put<number>(`lastMutationID-${data.clientID}`, m.id);
+        lastMutationID = m.id;
+      } catch (e) {
+        console.log(
+          `Error occured while running mutation: ${name}`,
+          JSON.stringify(e)
+        );
+        return new Response(`Error occured while running mutation: ${name}`, {
+          status: 400,
+        });
+      }
+    }
 
     this.sendPoke();
     return new Response(null, {
