@@ -13,11 +13,10 @@ type Fact = {
 };
 
 const processFact = (f: Fact) => {
-  let indexes: { eav: string; ave?: string; vae?: string } = {
+  let indexes: { eav: string; ave?: string; vae?: string; aev: string } = {
     eav: `${f.entity}-${f.attribute}`,
+    aev: `${f.attribute}-${f.entity}`,
   };
-  indexes.ave = `${f.attribute}-${f.value}`;
-  indexes.vae = "";
   return { ...f, indexes };
 };
 
@@ -49,7 +48,7 @@ const rep = new Replicache({
     let ops = data.data.map((fact) => {
       return {
         op: "put",
-        key: `ea-${fact.entity}-${fact.attribute}`,
+        key: `${fact.id}`,
         value: processFact(fact),
       } as const;
     });
@@ -64,8 +63,8 @@ const rep = new Replicache({
   },
   mutators,
 });
-
-rep.createIndex({ name: `aev`, jsonPointer: `/indexes/aev` });
+rep.createIndex({ name: "eav", jsonPointer: "/indexes/eav" });
+rep.createIndex({ name: "aev", jsonPointer: "/indexes/aev" });
 
 const Home: NextPage = () => {
   let socket = useRef<WebSocket>();
@@ -77,24 +76,55 @@ const Home: NextPage = () => {
       rep.pull();
     });
   }, []);
-  let test = useSubscribe<ReadonlyJSONValue>(
-    rep,
-    async (tx) => {
-      let test = await tx.scan().entries().toArray();
-      return test;
-    },
-    []
-  );
 
   return (
     <div>
-      <NewFact />
-      <pre>{JSON.stringify(test, null, "  ")}</pre>
+      <NewEntity />
+      <Entities />
     </div>
   );
 };
 
-function NewFact() {
+function Entities() {
+  let entities = useSubscribe<string[]>(
+    rep,
+    async (tx) => {
+      let keys = await tx
+        .scan({ indexName: `aev`, prefix: "title" })
+        .keys()
+        .toArray();
+      return keys.map((k) => k[0].slice(6));
+    },
+    []
+  );
+  return (
+    <ul>
+      {entities.map((e) => {
+        return <Entity key={e} entityID={e} />;
+      })}
+    </ul>
+  );
+}
+
+function Entity(props: { entityID: string }) {
+  let title = useSubscribe<string>(
+    rep,
+    async (tx) => {
+      let title = await tx
+        .scan({ indexName: `eav`, prefix: `${props.entityID}-title` })
+        .values()
+        .next();
+      console.log(title);
+      return title.value.value;
+    },
+    ``,
+    []
+  );
+  if (!title) return null;
+  return <h3>{title}</h3>;
+}
+
+function NewEntity() {
   let [state, setState] = useState({ title: "" });
   return (
     <div
@@ -111,7 +141,7 @@ function NewFact() {
           rep.mutate.createNewCard({ title: state.title, entity: ulid() });
         }}
       >
-        mutate!
+        create!
       </button>
     </div>
   );
