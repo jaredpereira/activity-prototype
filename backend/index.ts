@@ -56,6 +56,7 @@ export type Fact = {
   id: string;
   lastUpdated: string;
   retracted?: boolean;
+  position: string;
   entity: string;
   attribute: string;
   value: string;
@@ -70,7 +71,7 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 6;
+  version = 10;
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
       let lastVersion = (await this.state.storage.get("meta-lastVersion")) || 0;

@@ -16,14 +16,17 @@ export const processFact = (f: FactInput | Fact) => {
 };
 
 const clientAssert = async (tx: WriteTransaction, f: FactInput) => {
-  let existingFact = await tx
+  let existingFact = (await tx
     .scan({ indexName: `eav`, prefix: `${f.entity}-${f.attribute}` })
-    .keys()
-    .toArray();
+    .entries()
+    .toArray()) as [[string, string], Fact][];
 
   if (!existingFact[0]) await tx.put(ulid(), processFact(f));
   else {
-    await tx.put(existingFact[0][1], processFact(f));
+    await tx.put(existingFact[0][0][1], {
+      ...existingFact[0][1],
+      ...processFact(f),
+    });
   }
 };
 
@@ -71,8 +74,35 @@ async function serverRetract(tx: DurableObjectStorage, factID: string) {
   }
 }
 
-const createNewCard: Mutation<{ title: string; entity: string }> = (args) => {
+async function serverUpdateFact(
+  tx: DurableObjectStorage,
+  id: string,
+  f: Partial<Fact>
+) {
+  let lastUpdated = Date.now().toString();
+  let existingFact = await tx.get<Fact>(`factID-${id}`);
+  if (!existingFact) return;
+  let newData: Fact = {
+    ...existingFact,
+    ...f,
+    lastUpdated,
+  };
+  tx.put(`ea-${newData.entity}-${newData.attribute}`, newData);
+  tx.put(`ti-${lastUpdated}-${newData.id}`, newData);
+  tx.put(`factID-${newData.id}`, newData);
+  // We don't technically need to delete this but might as well!
+  if (existingFact.lastUpdated !== lastUpdated) {
+    tx.delete(`ti-${existingFact.lastUpdated}-${existingFact.id}`);
+  }
+}
+
+const createNewCard: Mutation<{
+  title: string;
+  entity: string;
+  position: string;
+}> = (args) => {
   let fact = {
+    position: args.position,
     entity: args.entity,
     attribute: "title",
     value: args.title,
@@ -83,31 +113,33 @@ const createNewCard: Mutation<{ title: string; entity: string }> = (args) => {
   };
 };
 
-const updateCardTitle: Mutation<{ cardID: string; newTitle: string }> = (
-  args
-) => {
-  let fact = {
-    entity: args.cardID,
-    attribute: `title`,
-    value: args.newTitle,
-  };
+const assertFact: Mutation<{
+  entity: string;
+  position: string;
+  attribute: string;
+  value: string;
+}> = (args) => {
   return {
-    client: async (tx) => clientAssert(tx, fact),
-    server: async (tx) => serverAssert(tx, fact),
+    client: async (tx) => clientAssert(tx, args),
+    server: async (tx) => serverAssert(tx, args),
   };
 };
 
-const updateCardContent: Mutation<{ cardID: string; newContent: string }> = (
+const updatePosition: Mutation<{ factID: string; position: string }> = (
   args
 ) => {
-  let fact = {
-    entity: args.cardID,
-    attribute: `textContent`,
-    value: args.newContent,
-  };
   return {
-    client: async (tx) => clientAssert(tx, fact),
-    server: async (tx) => serverAssert(tx, fact),
+    client: async (tx) => {
+      let fact = (await tx.get(args.factID)) as Fact | undefined;
+      if (!fact) return;
+      tx.put(args.factID, {
+        ...fact,
+        position: args.position,
+      });
+    },
+    server: async (tx) => {
+      serverUpdateFact(tx, args.factID, { position: args.position });
+    },
   };
 };
 
@@ -133,7 +165,7 @@ const deleteCard: Mutation<{ cardID: string }> = (args) => {
 
 export const Mutations = {
   createNewCard,
-  updateCardTitle,
-  updateCardContent,
+  assertFact,
   deleteCard,
+  updatePosition,
 };

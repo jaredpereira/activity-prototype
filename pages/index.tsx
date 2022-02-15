@@ -6,6 +6,7 @@ import { MyPullResponse } from "../backend";
 import { Mutations, processFact } from "../backend/mutations";
 import { ulid } from "ulid";
 import { Fact } from "../backend";
+import { generateKeyBetween } from "../src/fractional-indexing";
 
 type ReplicacheMutators = {
   [k in keyof typeof Mutations]: (
@@ -22,7 +23,7 @@ let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
 
 const rep = new Replicache({
   name: "test-db1",
-  schemaVersion: `6`,
+  schemaVersion: `10`,
   pushDelay: 500,
   pullURL: "https://activity-prototype.awarm.workers.dev/pull",
   pushURL: "https://activity-prototype.awarm.workers.dev/push",
@@ -68,89 +69,161 @@ const Home: NextPage = () => {
 
   return (
     <div className="text-center m-auto max-w-screen-md justify-items-center">
-      <NewCard />
       <CardList />
     </div>
   );
 };
 
 function CardList() {
-  let entities = useSubscribe<string[]>(
+  let entities = useSubscribe<Fact[]>(
     rep,
     async (tx) => {
-      let keys = await tx
+      let entities = (await tx
         .scan({ indexName: `aev`, prefix: "title" })
-        .keys()
-        .toArray();
+        .values()
+        .toArray()) as Fact[];
 
-      return keys.map((k) => k[0].slice(6));
+      return entities;
     },
     []
-  );
+  ).sort((a, b) => {
+    if (a.position === b.position) return a.id > b.id ? -1 : 1;
+    return a.position > b.position ? -1 : 1;
+  });
+
   return (
     <ul className="grid gap-4 justify-items-center">
+      <NewCard firstEntity={entities[0]?.position} />
       {entities.map((e) => {
-        return <Card key={e} entityID={e} />;
+        return (
+          <Card key={e.entity} entityID={e.entity} position={e.position} />
+        );
       })}
     </ul>
   );
 }
 
-function Card(props: { entityID: string }) {
+function Card(props: { entityID: string; position: string }) {
   let textarea = useRef<HTMLTextAreaElement | null>(null);
-  let title = useSubscribe<string>(
+  let title = useSubscribe<Fact | null>(
     rep,
     async (tx) => {
       let title = (await tx
         .scan({ indexName: `eav`, prefix: `${props.entityID}-title` })
         .values()
         .toArray()) as Fact[];
-      return title[0]?.value || "";
+      return title[0] || "";
     },
-    ``,
+    null,
     []
   );
 
-  let content = useSubscribe<string>(
+  let content = useSubscribe<Fact | null>(
     rep,
     async (tx) => {
       let title = (await tx
         .scan({ indexName: `eav`, prefix: `${props.entityID}-textContent` })
         .values()
         .toArray()) as Fact[];
-      return title[0]?.value || "";
+      return title[0] || null;
     },
-    "",
+    null,
     []
   );
 
-  if (!title) return null;
   return (
-    <div className="grid max-w-sm gap-4 p-4 border-2 border-black">
-      <button onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}>
-        del
-      </button>
+    <div className="grid max-w-sm gap-4 p-4 border-2 border-black rounded-md">
+      <div>
+        <button
+          className="border-2 w-min px-2"
+          onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}
+        >
+          del
+        </button>
+        <button
+          className="border-2 w-min px-2"
+          onClick={() => {
+            rep.query(async (tx) => {
+              let titles = (
+                (await tx
+                  .scan({ indexName: `aev`, prefix: `title` })
+                  .values()
+                  .toArray()) as Fact[]
+              ).sort((a, b) => {
+                if (a.position === b.position) return a.id > b.id ? 1 : -1;
+                return a.position > b.position ? 1 : -1;
+              });
+              let index = titles.findIndex((f) => f.entity === props.entityID);
+              if (index === -1) throw new Error(`cant find index of card`);
+              if (!titles[index - 1]) return;
+              let newPosition = generateKeyBetween(
+                titles[index - 2]?.position || null,
+                titles[index - 1]?.position || null
+              );
+              rep.mutate.updatePosition({
+                factID: titles[index].id,
+                position: newPosition,
+              });
+            });
+          }}
+        >
+          down
+        </button>
+        <button
+          className="border-2 w-min px-2"
+          onClick={() => {
+            rep.query(async (tx) => {
+              let titles = (
+                (await tx
+                  .scan({ indexName: `aev`, prefix: `title` })
+                  .values()
+                  .toArray()) as Fact[]
+              ).sort((a, b) => {
+                if (a.position === b.position) return a.id > b.id ? 1 : -1;
+                return a.position > b.position ? 1 : -1;
+              });
+              let index = titles.findIndex((f) => f.entity === props.entityID);
+              if (index === -1) throw new Error(`cant find index of card`);
+              if (!titles[index + 1]) return;
+              let newPosition = generateKeyBetween(
+                titles[index + 1]?.position || null,
+                titles[index + 2]?.position || null
+              );
+              rep.mutate.updatePosition({
+                factID: titles[index].id,
+                position: newPosition,
+              });
+            });
+          }}
+        >
+          up
+        </button>
+      </div>
       <input
         className="text-xl border-2 p-2"
         spellCheck={false}
-        value={title}
+        value={title?.value || ""}
         onChange={(e) => {
-          rep.mutate.updateCardTitle({
-            cardID: props.entityID,
-            newTitle: e.currentTarget.value,
+          rep.mutate.assertFact({
+            entity: props.entityID,
+            attribute: "title",
+            value: e.currentTarget.value,
+            position: title?.position || "a0",
           });
         }}
       />
       <textarea
         className="border-2 p-2"
         ref={textarea}
-        value={content}
+        value={content?.value || ""}
         onChange={async (e) => {
           let start = e.currentTarget.selectionStart,
             end = e.currentTarget.selectionEnd;
-          await rep.mutate.updateCardContent({
-            cardID: props.entityID,
-            newContent: e.currentTarget.value,
+          await rep.mutate.assertFact({
+            entity: props.entityID,
+            attribute: "textContent",
+            value: e.currentTarget.value,
+            position: content?.position || "a0",
           });
 
           textarea.current?.setSelectionRange(start, end);
@@ -160,12 +233,22 @@ function Card(props: { entityID: string }) {
   );
 }
 
-function NewCard() {
+function NewCard(props: { firstEntity: string }) {
   return (
     <button
       className="text-4xl justify-self-center"
       onClick={() => {
-        rep.mutate.createNewCard({ title: ``, entity: ulid() });
+        try {
+          let newPosition = generateKeyBetween(null, props.firstEntity || null);
+          console.log(newPosition);
+          rep.mutate.createNewCard({
+            title: ``,
+            entity: ulid(),
+            position: newPosition,
+          });
+        } catch (e) {
+          console.log(e);
+        }
       }}
     >
       +
