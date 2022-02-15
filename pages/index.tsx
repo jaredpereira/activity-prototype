@@ -1,44 +1,28 @@
 import type { NextPage } from "next";
-import { useEffect, useRef, useState } from "react";
-import { ReadonlyJSONValue, Replicache, WriteTransaction } from "replicache";
+import { useEffect, useRef } from "react";
+import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
 import { MyPullResponse } from "../backend";
-import { Mutations } from "../backend/mutations";
+import { Mutations, processFact } from "../backend/mutations";
 import { ulid } from "ulid";
-
-type Fact = {
-  entity: string;
-  attribute: string;
-  value: string;
-};
-
-const processFact = (f: Fact) => {
-  let indexes: { eav: string; ave?: string; vae?: string; aev: string } = {
-    eav: `${f.entity}-${f.attribute}`,
-    aev: `${f.attribute}-${f.entity}`,
-  };
-  return { ...f, indexes };
-};
+import { Fact } from "../backend";
 
 type ReplicacheMutators = {
   [k in keyof typeof Mutations]: (
     tx: WriteTransaction,
-    args: Parameters<typeof Mutations[k]>[1]
+    args: Parameters<typeof Mutations[k]>[0]
   ) => Promise<void>;
 };
 
 let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
   acc[k] = (tx: WriteTransaction, args: any) =>
-    Mutations[k as keyof typeof Mutations](async (f: Fact) => {
-      await tx.put(`ea-${f.entity}-${f.attribute}`, processFact(f));
-    }, args);
-
+    Mutations[k as keyof typeof Mutations](args).client(tx);
   return acc;
 }, {} as any);
 
 const rep = new Replicache({
   name: "test-db1",
-  schemaVersion: `2`,
+  schemaVersion: `6`,
   pushDelay: 500,
   pullURL: "https://activity-prototype.awarm.workers.dev/pull",
   pushURL: "https://activity-prototype.awarm.workers.dev/push",
@@ -46,9 +30,14 @@ const rep = new Replicache({
     let res = await fetch(req);
     let data: MyPullResponse = await res.json();
     let ops = data.data.map((fact) => {
+      if (fact.retracted)
+        return {
+          op: "del",
+          key: fact.id,
+        } as const;
       return {
         op: "put",
-        key: `${fact.id}`,
+        key: fact.id,
         value: processFact(fact),
       } as const;
     });
@@ -78,14 +67,14 @@ const Home: NextPage = () => {
   }, []);
 
   return (
-    <div>
-      <NewEntity />
-      <Entities />
+    <div className="text-center m-auto max-w-screen-md justify-items-center">
+      <NewCard />
+      <CardList />
     </div>
   );
 };
 
-function Entities() {
+function CardList() {
   let entities = useSubscribe<string[]>(
     rep,
     async (tx) => {
@@ -93,57 +82,94 @@ function Entities() {
         .scan({ indexName: `aev`, prefix: "title" })
         .keys()
         .toArray();
+
       return keys.map((k) => k[0].slice(6));
     },
     []
   );
   return (
-    <ul>
+    <ul className="grid gap-4 justify-items-center">
       {entities.map((e) => {
-        return <Entity key={e} entityID={e} />;
+        return <Card key={e} entityID={e} />;
       })}
     </ul>
   );
 }
 
-function Entity(props: { entityID: string }) {
+function Card(props: { entityID: string }) {
+  let textarea = useRef<HTMLTextAreaElement | null>(null);
   let title = useSubscribe<string>(
     rep,
     async (tx) => {
-      let title = await tx
+      let title = (await tx
         .scan({ indexName: `eav`, prefix: `${props.entityID}-title` })
         .values()
-        .next();
-      console.log(title);
-      return title.value.value;
+        .toArray()) as Fact[];
+      return title[0]?.value || "";
     },
     ``,
     []
   );
+
+  let content = useSubscribe<string>(
+    rep,
+    async (tx) => {
+      let title = (await tx
+        .scan({ indexName: `eav`, prefix: `${props.entityID}-textContent` })
+        .values()
+        .toArray()) as Fact[];
+      return title[0]?.value || "";
+    },
+    "",
+    []
+  );
+
   if (!title) return null;
-  return <h3>{title}</h3>;
+  return (
+    <div className="grid max-w-sm gap-4 p-4 border-2 border-black">
+      <button onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}>
+        del
+      </button>
+      <input
+        className="text-xl border-2 p-2"
+        spellCheck={false}
+        value={title}
+        onChange={(e) => {
+          rep.mutate.updateCardTitle({
+            cardID: props.entityID,
+            newTitle: e.currentTarget.value,
+          });
+        }}
+      />
+      <textarea
+        className="border-2 p-2"
+        ref={textarea}
+        value={content}
+        onChange={async (e) => {
+          let start = e.currentTarget.selectionStart,
+            end = e.currentTarget.selectionEnd;
+          await rep.mutate.updateCardContent({
+            cardID: props.entityID,
+            newContent: e.currentTarget.value,
+          });
+
+          textarea.current?.setSelectionRange(start, end);
+        }}
+      />
+    </div>
+  );
 }
 
-function NewEntity() {
-  let [state, setState] = useState({ title: "" });
+function NewCard() {
   return (
-    <div
-      className="grid gap-1"
-      style={{ gridTemplateColumns: "min-content auto" }}
+    <button
+      className="text-4xl justify-self-center"
+      onClick={() => {
+        rep.mutate.createNewCard({ title: ``, entity: ulid() });
+      }}
     >
-      {"title: "}
-      <input
-        value={state.title}
-        onChange={(e) => setState({ ...state, title: e.currentTarget.value })}
-      />
-      <button
-        onClick={() => {
-          rep.mutate.createNewCard({ title: state.title, entity: ulid() });
-        }}
-      >
-        create!
-      </button>
-    </div>
+      +
+    </button>
   );
 }
 

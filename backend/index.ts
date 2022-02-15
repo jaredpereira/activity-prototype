@@ -1,5 +1,4 @@
 import { PullRequest, PullResponse, PushRequest } from "replicache";
-import { ulid } from "../src/ulid";
 import { Mutations } from "./mutations";
 
 export default {
@@ -56,12 +55,13 @@ type Cookie = {
 export type Fact = {
   id: string;
   lastUpdated: string;
+  retracted?: boolean;
   entity: string;
   attribute: string;
   value: string;
 };
 
-type FactInput = Omit<Fact, "lastUpdated" | "id">;
+export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
   cookie?: Cookie;
@@ -70,7 +70,7 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 3;
+  version = 6;
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
       let lastVersion = (await this.state.storage.get("meta-lastVersion")) || 0;
@@ -86,6 +86,18 @@ export class Counter implements DurableObject {
     // Apply requested action.
     let url = new URL(request.url);
     switch (url.pathname) {
+      case "/dump": {
+        return new Response(
+          JSON.stringify([...(await this.state.storage.list())]),
+          {
+            headers: {
+              "Access-Control-Allow-Origin": "*",
+              "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+              "Content-Type": "application/json;charset=UTF-8",
+            },
+          }
+        );
+      }
       case "/pull":
         return this.pull(request);
       case "/push":
@@ -99,7 +111,7 @@ export class Counter implements DurableObject {
           headers: {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-            "content-type": "application/json;charset=UTF-8",
+            "Content-Type": "application/json;charset=UTF-8",
           },
         });
     }
@@ -114,7 +126,8 @@ export class Counter implements DurableObject {
       )) || 0;
 
     let map = await this.state.storage.list<Fact>({
-      start: `tea-${cookie?.lastUpdated || ""}`,
+      prefix: `ti`,
+      start: `ti-${cookie?.lastUpdated || ""}`,
     });
     let updates = [...map.values()].slice(-1);
 
@@ -130,35 +143,9 @@ export class Counter implements DurableObject {
     return new Response(JSON.stringify(response), {
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "content-type": "application/json;charset=UTF-8",
+        "Content-Type": "application/json;charset=UTF-8",
       },
     });
-  }
-
-  async assertFact(fact: FactInput) {
-    let lastUpdated = Date.now().toString();
-    let existingValue = await this.state.storage.get<Fact & { time: string }>(
-      `ea-${fact.entity}-${fact.attribute}`
-    );
-    let newData: Fact = {
-      ...fact,
-      // If we don't have an existing value generate a new unique id for this
-      // fact. When we have cardinality many attributes this will need to be
-      // handled differently
-      id: existingValue?.id || ulid(),
-      lastUpdated,
-    };
-    this.state.storage.put(
-      `ea-${newData.entity}-${newData.attribute}`,
-      newData
-    );
-    this.state.storage.put(`ti-${lastUpdated}-${newData.id}`, newData);
-    if (existingValue) {
-      // We don't technically need to delete this but might as well!
-      this.state.storage.delete(
-        `tea-${existingValue.time}-${existingValue.id}`
-      );
-    }
   }
 
   async push(request: Request) {
@@ -179,7 +166,7 @@ export class Counter implements DurableObject {
       }
 
       try {
-        await Mutations[name](this.assertFact.bind(this), m.args as any);
+        await Mutations[name](m.args as any).server(this.state.storage);
         this.state.storage.put<number>(`lastMutationID-${data.clientID}`, m.id);
         lastMutationID = m.id;
       } catch (e) {
@@ -198,7 +185,7 @@ export class Counter implements DurableObject {
       status: 200,
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "content-type": "application/json;charset=UTF-8",
+        "Content-Type": "application/json;charset=UTF-8",
       },
     });
   }
