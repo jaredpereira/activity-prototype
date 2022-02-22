@@ -1,5 +1,7 @@
 import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { Mutations } from "./mutations";
+import { ulid } from "../src/ulid";
+import { writeFactToStorage } from "./writes";
 
 export default {
   fetch: handleRequest,
@@ -59,25 +61,126 @@ export type Fact = {
   position: string;
   entity: string;
   attribute: string;
-  value: string;
+  value: Value;
 };
+
+export type Value =
+  | {
+      type: "string";
+      value: string;
+    }
+  | {
+      type: "boolean";
+      value: boolean;
+    };
 
 export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
   cookie?: Cookie;
-  data: Fact[];
+  data: (Fact & { meta: { schema: { unique: boolean } } })[];
+};
+
+export const indexes = {
+  ea: (entity: string, attribute: string, factID: string) =>
+    `ea-${entity}-${attribute}-${factID}`,
+  av: (attribute: string, value: string) => `av-${attribute}-${value}`,
+  factID: (factID: string) => `factID-${factID}`,
+  ti: (time: string, factID: string) => `ti-${time}-${factID}`,
 };
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 10;
+  version = 23;
+
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
-      let lastVersion = (await this.state.storage.get("meta-lastVersion")) || 0;
-      if (lastVersion < this.version) {
-        await this.state.storage.deleteAll();
-        await this.state.storage.put("meta-lastVersion", this.version);
+      let lastVersion =
+        (await this.state.storage.get<number>("meta-lastVersion")) || 0;
+      if (lastVersion >= this.version) return;
+      await this.state.storage.deleteAll();
+      await this.state.storage.put("meta-lastVersion", this.version);
+
+      try {
+        let e = {
+          name: ulid(),
+          unique: ulid(),
+          type: ulid(),
+          "union/value": ulid(),
+          cardinatlity: ulid(),
+          title: ulid(),
+          textContent: ulid(),
+        };
+        const initialFacts = [
+          { entity: e.name, attribute: "name", value: "name" },
+          { entity: e.name, attribute: "unique", value: true },
+          { entity: e.name, attribute: "type", value: "string" },
+
+          { entity: e.unique, attribute: "name", value: "unique" },
+          { entity: e.unique, attribute: "type", value: "boolean" },
+
+          { entity: e.type, attribute: "name", value: "type" },
+          { entity: e.type, attribute: "type", value: "union" },
+          { entity: e.type, attribute: `union/value`, value: `string` },
+          { entity: e.type, attribute: `union/value`, value: `union` },
+          { entity: e.type, attribute: `union/value`, value: `boolean` },
+
+          { entity: e["union/value"], attribute: "name", value: `union/value` },
+          { entity: e["union/value"], attribute: "type", value: `string` },
+          { entity: e["union/value"], attribute: "cardinality", value: `many` },
+
+          { entity: e.cardinatlity, attribute: "name", value: "cardinality" },
+          { entity: e.cardinatlity, attribute: "type", value: "union" },
+          { entity: e.cardinatlity, attribute: "union/value", value: "many" },
+          { entity: e.cardinatlity, attribute: "union/value", value: "one" },
+
+          { entity: e.title, attribute: "name", value: "title" },
+          { entity: e.title, attribute: "type", value: "string" },
+          { entity: e.title, attribute: "unique", value: true },
+
+          { entity: e.textContent, attribute: "name", value: "textContent" },
+          { entity: e.textContent, attribute: "type", value: "string" },
+        ];
+
+        let lastUpdated = Date.now().toString();
+        initialFacts.forEach((f, index) => {
+          let attribute = initialFacts.find(
+            (initialFact) =>
+              initialFact.attribute === "name" &&
+              initialFact.value === f.attribute
+          );
+          if (!attribute)
+            throw new Error(
+              "tried to initialize with uninitialized attribute!"
+            );
+          let value: Value =
+            typeof f.value === `string`
+              ? { type: "string", value: f.value }
+              : { type: "boolean", value: f.value };
+          let newData: Fact = {
+            ...f,
+            value,
+            id: ulid(),
+            position: index.toString(),
+            lastUpdated,
+          };
+          writeFactToStorage(this.state.storage, newData, {
+            cardinality:
+              (initialFacts.find(
+                (f) =>
+                  f.entity === e[newData.attribute as keyof typeof e] &&
+                  f.attribute === "cardinality"
+              )?.value as "one" | "many") || "one",
+            unique: !!initialFacts.find(
+              (f) =>
+                f.entity === e[newData.attribute as keyof typeof e] &&
+                f.attribute === "unique" &&
+                f.value === true
+            ),
+          });
+        });
+      } catch (e) {
+        console.log("CONSTRUCTOR ERROR", e);
       }
     });
   }
@@ -119,34 +222,44 @@ export class Counter implements DurableObject {
   }
 
   async pull(request: Request) {
-    let data: PullRequest = await request.json();
-    let cookie = data.cookie as Cookie | null;
-    let lastMutationID =
-      (await this.state.storage.get<number>(
-        `lastMutationID-${data.clientID}`
-      )) || 0;
+    try {
+      let data: PullRequest = await request.json();
+      let cookie = data.cookie as Cookie | null;
+      let lastMutationID =
+        (await this.state.storage.get<number>(
+          `lastMutationID-${data.clientID}`
+        )) || 0;
 
-    let map = await this.state.storage.list<Fact>({
-      prefix: `ti`,
-      start: `ti-${cookie?.lastUpdated || ""}`,
-    });
-    let updates = [...map.values()].slice(-1);
+      let map = await this.state.storage.list<
+        Fact & { meta: { schema: { unique: boolean } } }
+      >({
+        prefix: `ti`,
+        start: `ti-${cookie?.lastUpdated || ""}`,
+      });
+      let updates = [...map.values()].filter(
+        (f) => !cookie?.lastUpdated || f.lastUpdated > cookie.lastUpdated
+      );
 
-    let lastKey = updates[updates.length - 1];
-    let newCookie: Cookie | undefined = !lastKey
-      ? undefined
-      : { lastUpdated: lastKey.lastUpdated };
-    let response: MyPullResponse = {
-      cookie: newCookie,
-      lastMutationID,
-      data: updates,
-    };
-    return new Response(JSON.stringify(response), {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json;charset=UTF-8",
-      },
-    });
+      let lastKey = updates[updates.length - 1];
+      let newCookie: Cookie | undefined = !lastKey
+        ? cookie?.lastUpdated
+          ? { lastUpdated: cookie.lastUpdated }
+          : undefined
+        : { lastUpdated: lastKey.lastUpdated };
+      let response: MyPullResponse = {
+        cookie: newCookie,
+        lastMutationID,
+        data: updates,
+      };
+      return new Response(JSON.stringify(response), {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json;charset=UTF-8",
+        },
+      });
+    } catch (e) {
+      console.log(e);
+    }
   }
 
   async push(request: Request) {

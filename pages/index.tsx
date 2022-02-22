@@ -1,5 +1,5 @@
 import type { NextPage } from "next";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
 import { MyPullResponse } from "../backend";
@@ -16,14 +16,14 @@ type ReplicacheMutators = {
 };
 
 let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
-  acc[k] = (tx: WriteTransaction, args: any) =>
+  acc[k] = async (tx: WriteTransaction, args: any) =>
     Mutations[k as keyof typeof Mutations](args).client(tx);
   return acc;
 }, {} as any);
 
 const rep = new Replicache({
-  name: "test-db1",
-  schemaVersion: `10`,
+  name: "test-db2",
+  schemaVersion: `23`,
   pushDelay: 500,
   pullURL: "https://activity-prototype.awarm.workers.dev/pull",
   pushURL: "https://activity-prototype.awarm.workers.dev/push",
@@ -39,7 +39,7 @@ const rep = new Replicache({
       return {
         op: "put",
         key: fact.id,
-        value: processFact(fact),
+        value: processFact(fact.id, fact, fact.meta.schema),
       } as const;
     });
     return {
@@ -53,8 +53,10 @@ const rep = new Replicache({
   },
   mutators,
 });
+
 rep.createIndex({ name: "eav", jsonPointer: "/indexes/eav" });
 rep.createIndex({ name: "aev", jsonPointer: "/indexes/aev" });
+rep.createIndex({ name: "ave", jsonPointer: "/indexes/ave" });
 
 const Home: NextPage = () => {
   let socket = useRef<WebSocket>();
@@ -104,20 +106,24 @@ function CardList() {
 }
 
 function Card(props: { entityID: string; position: string }) {
-  let textarea = useRef<HTMLTextAreaElement | null>(null);
-  let title = useSubscribe<Fact | null>(
-    rep,
-    async (tx) => {
-      let title = (await tx
-        .scan({ indexName: `eav`, prefix: `${props.entityID}-title` })
-        .values()
-        .toArray()) as Fact[];
-      return title[0] || "";
-    },
-    null,
-    []
+  return (
+    <div className="grid max-w-sm gap-4 p-4 border-2 border-black rounded-md">
+      <div>
+        <button
+          className="border-2 w-min px-2"
+          onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}
+        >
+          del
+        </button>
+      </div>
+      <Title entityID={props.entityID} />
+      <CardTextContent entityID={props.entityID} />
+    </div>
   );
+}
 
+function CardTextContent(props: { entityID: string }) {
+  let textarea = useRef<HTMLTextAreaElement | null>(null);
   let content = useSubscribe<Fact | null>(
     rep,
     async (tx) => {
@@ -130,129 +136,95 @@ function Card(props: { entityID: string; position: string }) {
     null,
     []
   );
-
   return (
-    <div className="grid max-w-sm gap-4 p-4 border-2 border-black rounded-md">
-      <div>
-        <button
-          className="border-2 w-min px-2"
-          onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}
-        >
-          del
-        </button>
-        <button
-          className="border-2 w-min px-2"
-          onClick={() => {
-            rep.query(async (tx) => {
-              let titles = (
-                (await tx
-                  .scan({ indexName: `aev`, prefix: `title` })
-                  .values()
-                  .toArray()) as Fact[]
-              ).sort((a, b) => {
-                if (a.position === b.position) return a.id > b.id ? 1 : -1;
-                return a.position > b.position ? 1 : -1;
-              });
-              let index = titles.findIndex((f) => f.entity === props.entityID);
-              if (index === -1) throw new Error(`cant find index of card`);
-              if (!titles[index - 1]) return;
-              let newPosition = generateKeyBetween(
-                titles[index - 2]?.position || null,
-                titles[index - 1]?.position || null
-              );
-              rep.mutate.updatePosition({
-                factID: titles[index].id,
-                position: newPosition,
-              });
-            });
-          }}
-        >
-          down
-        </button>
-        <button
-          className="border-2 w-min px-2"
-          onClick={() => {
-            rep.query(async (tx) => {
-              let titles = (
-                (await tx
-                  .scan({ indexName: `aev`, prefix: `title` })
-                  .values()
-                  .toArray()) as Fact[]
-              ).sort((a, b) => {
-                if (a.position === b.position) return a.id > b.id ? 1 : -1;
-                return a.position > b.position ? 1 : -1;
-              });
-              let index = titles.findIndex((f) => f.entity === props.entityID);
-              if (index === -1) throw new Error(`cant find index of card`);
-              if (!titles[index + 1]) return;
-              let newPosition = generateKeyBetween(
-                titles[index + 1]?.position || null,
-                titles[index + 2]?.position || null
-              );
-              rep.mutate.updatePosition({
-                factID: titles[index].id,
-                position: newPosition,
-              });
-            });
-          }}
-        >
-          up
-        </button>
-      </div>
-      <input
-        className="text-xl border-2 p-2"
-        spellCheck={false}
-        value={title?.value || ""}
-        onChange={(e) => {
-          rep.mutate.assertFact({
-            entity: props.entityID,
-            attribute: "title",
-            value: e.currentTarget.value,
-            position: title?.position || "a0",
-          });
-        }}
-      />
-      <textarea
-        className="border-2 p-2"
-        ref={textarea}
-        value={content?.value || ""}
-        onChange={async (e) => {
-          let start = e.currentTarget.selectionStart,
-            end = e.currentTarget.selectionEnd;
-          await rep.mutate.assertFact({
-            entity: props.entityID,
-            attribute: "textContent",
-            value: e.currentTarget.value,
-            position: content?.position || "a0",
-          });
+    <textarea
+      className="border-2 p-2"
+      ref={textarea}
+      value={(content?.value.value as string) || ""}
+      onChange={async (e) => {
+        let start = e.currentTarget.selectionStart,
+          end = e.currentTarget.selectionEnd;
+        await rep.mutate.assertFact({
+          entity: props.entityID,
+          attribute: "textContent",
+          value: { type: "string", value: e.currentTarget.value },
+          position: content?.position || "a0",
+        });
 
-          textarea.current?.setSelectionRange(start, end);
-        }}
-      />
-    </div>
+        textarea.current?.setSelectionRange(start, end);
+      }}
+    />
+  );
+}
+
+function Title(props: { entityID: string }) {
+  let input = useRef<HTMLInputElement | null>(null);
+  let title = useSubscribe<Fact | null>(
+    rep,
+    async (tx) => {
+      let title = (await tx
+        .scan({ indexName: `eav`, prefix: `${props.entityID}-title` })
+        .values()
+        .toArray()) as Fact[];
+      return title[0] || "";
+    },
+    null,
+    []
+  );
+  return (
+    <input
+      ref={input}
+      className="text-xl border-2 p-2"
+      spellCheck={false}
+      value={(title?.value.value as string) || ""}
+      onChange={(e) => {
+        let start = e.currentTarget.selectionStart,
+          end = e.currentTarget.selectionEnd;
+        rep.mutate.assertFact({
+          entity: props.entityID,
+          attribute: "title",
+          value: { type: "string", value: e.currentTarget.value },
+          position: title?.position || "a0",
+        });
+        input.current?.setSelectionRange(start, end);
+      }}
+    />
   );
 }
 
 function NewCard(props: { firstEntity: string }) {
+  let [newTitle, setNewTitle] = useState("");
   return (
-    <button
-      className="text-4xl justify-self-center"
-      onClick={() => {
-        try {
-          let newPosition = generateKeyBetween(null, props.firstEntity || null);
-          console.log(newPosition);
-          rep.mutate.createNewCard({
-            title: ``,
-            entity: ulid(),
-            position: newPosition,
-          });
-        } catch (e) {
-          console.log(e);
-        }
-      }}
-    >
-      +
-    </button>
+    <div>
+      <input
+        value={newTitle}
+        onChange={(e) => {
+          setNewTitle(e.currentTarget.value);
+        }}
+      />
+      <button
+        className="text-4xl justify-self-center"
+        onClick={async () => {
+          try {
+            let newPosition = generateKeyBetween(
+              null,
+              props.firstEntity || null
+            );
+            console.log(
+              await rep.mutate.createNewCard({
+                title: newTitle,
+                entity: ulid(),
+                position: newPosition,
+              })
+            );
+          } catch (e) {
+            console.log(e);
+          }
+        }}
+      >
+        +
+      </button>
+    </div>
   );
 }
 
