@@ -59,53 +59,7 @@ function Card(props: { entityID: string; position: string }) {
       </div>
       <Title entityID={props.entityID} />
       <CardTextContent entityID={props.entityID} />
-      <Sections entityID={props.entityID} />
     </div>
-  );
-}
-
-function Sections(props: { entityID: string }) {
-  let rep = useReplicache();
-  let sections = useSubscribe<Fact[]>(
-    rep,
-    async (tx) => {
-      return tx
-        .scan({ indexName: "eav", prefix: `${props.entityID}-section` })
-        .values()
-        .toArray() as Promise<Fact[]>;
-    },
-    [],
-    []
-  );
-  let [newSectionName, setNewSectionName] = useState("");
-  return (
-    <ul>
-      {sections.map((s) => (
-        <li>{s.value.value}</li>
-      ))}
-      <div style={{ display: "grid", gridTemplateColumns: "auto min-content" }}>
-        <input
-          className="border-2"
-          value={newSectionName}
-          onChange={(e) => setNewSectionName(e.currentTarget.value)}
-        />
-        <button
-          onClick={() => {
-            rep.mutate.assertFact({
-              position: generateKeyBetween(
-                sections[sections.length - 1]?.position || null,
-                null
-              ),
-              entity: ulid(),
-              attribute: "section",
-              value: { type: "string", value: newSectionName },
-            });
-          }}
-        >
-          add
-        </button>
-      </div>
-    </ul>
   );
 }
 
@@ -181,7 +135,8 @@ function Title(props: { entityID: string }) {
   );
 }
 
-function NewCard(props: { firstEntity: string }) {
+function NewCard(props: { firstEntity: string | undefined }) {
+  let rep = useReplicache();
   let [newTitle, setNewTitle] = useState("");
   return (
     <div>

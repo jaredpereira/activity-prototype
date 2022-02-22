@@ -2,6 +2,7 @@ import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { Mutations } from "./mutations";
 import { ulid } from "../src/ulid";
 import { writeFactToStorage } from "./writes";
+import { generateNKeysBetween } from "../src/fractional-indexing";
 
 export default {
   fetch: handleRequest,
@@ -65,6 +66,7 @@ export type Fact = {
 };
 
 export type Value =
+  | { type: "union"; value: string }
   | {
       type: "string";
       value: string;
@@ -91,7 +93,7 @@ export const indexes = {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 23;
+  version = 25;
 
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
@@ -141,6 +143,7 @@ export class Counter implements DurableObject {
           { entity: e.textContent, attribute: "name", value: "textContent" },
           { entity: e.textContent, attribute: "type", value: "string" },
         ];
+        let positions = generateNKeysBetween(null, null, initialFacts.length);
 
         let lastUpdated = Date.now().toString();
         initialFacts.forEach((f, index) => {
@@ -154,14 +157,16 @@ export class Counter implements DurableObject {
               "tried to initialize with uninitialized attribute!"
             );
           let value: Value =
-            typeof f.value === `string`
+            f.attribute === "cardinality"
+              ? { type: "union", value: f.value as string }
+              : typeof f.value === `string`
               ? { type: "string", value: f.value }
               : { type: "boolean", value: f.value };
           let newData: Fact = {
             ...f,
             value,
             id: ulid(),
-            position: index.toString(),
+            position: positions[index],
             lastUpdated,
           };
           writeFactToStorage(this.state.storage, newData, {

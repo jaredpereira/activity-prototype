@@ -1,5 +1,6 @@
 import { WriteTransaction } from "replicache";
 import { FactInput, Fact } from ".";
+import { generateKeyBetween } from "../src/fractional-indexing";
 import { ulid } from "../src/ulid";
 import { serverAssertFact, serverUpdateFact } from "./writes";
 
@@ -136,9 +137,68 @@ const deleteCard: Mutation<{ cardID: string }> = (args) => {
   };
 };
 
+const createNewSection: Mutation<{
+  unique: boolean;
+  position: string;
+  cardinality: "one" | "many";
+  name: string;
+}> = (args) => {
+  return {
+    client: async (tx) => {
+      let entity = ulid();
+      await Promise.all([
+        clientAssert(tx, {
+          position: args.position,
+          entity,
+          attribute: "name",
+          value: { type: "string", value: args.name },
+        }),
+        clientAssert(tx, {
+          entity,
+          position: "a",
+          attribute: "unique",
+          value: { type: "boolean", value: args.unique },
+        }),
+        clientAssert(tx, {
+          entity,
+          position: "c",
+          attribute: "cardinality",
+          value: { type: "string", value: args.cardinality },
+        }),
+      ]);
+    },
+    server: async (tx) => {
+      let entity = ulid();
+      await Promise.all([
+        serverAssertFact(tx, {
+          position: args.position,
+          entity,
+          attribute: "name",
+          value: { type: "string", value: args.name },
+        }),
+        serverAssertFact(tx, {
+          entity,
+          position: generateKeyBetween(null, null),
+          attribute: "unique",
+          value: { type: "boolean", value: args.unique },
+        }),
+        console.log(
+          serverAssertFact(tx, {
+            entity,
+            position: generateKeyBetween(null, null),
+            attribute: "cardinality",
+            value: { type: "union", value: args.cardinality },
+          })
+        ),
+      ]);
+    },
+  };
+};
+
 export const Mutations = {
   createNewCard,
   assertFact,
   deleteCard,
   updatePosition,
+  createNewSection,
 };

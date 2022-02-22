@@ -24,7 +24,7 @@ export const ReplicacheProvider: React.FC = (props) => {
   useEffect(() => {
     const rep = new Replicache({
       name: "test-db2",
-      schemaVersion: `23`,
+      schemaVersion: `25`,
       pushDelay: 500,
       pullURL: "https://activity-prototype.awarm.workers.dev/pull",
       pushURL: "https://activity-prototype.awarm.workers.dev/push",
