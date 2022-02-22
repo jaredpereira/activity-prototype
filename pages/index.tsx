@@ -5,6 +5,7 @@ import { ulid } from "ulid";
 import { Fact } from "../backend";
 import { generateKeyBetween } from "../src/fractional-indexing";
 import { useReplicache } from "../src/useReplicache";
+import { sortByPosition } from "../src/utils";
 
 const Home: NextPage = () => {
   return (
@@ -27,24 +28,19 @@ function CardList() {
       return entities;
     },
     []
-  ).sort((a, b) => {
-    if (a.position === b.position) return a.id > b.id ? -1 : 1;
-    return a.position > b.position ? -1 : 1;
-  });
+  ).sort(sortByPosition("aev"));
 
   return (
     <ul className="grid gap-4 justify-items-center">
-      <NewCard firstEntity={entities[0]?.position} />
+      <NewCard firstEntity={entities[0]?.positions.aev} />
       {entities.map((e) => {
-        return (
-          <Card key={e.entity} entityID={e.entity} position={e.position} />
-        );
+        return <Card key={e.entity} entityID={e.entity} />;
       })}
     </ul>
   );
 }
 
-function Card(props: { entityID: string; position: string }) {
+function Card(props: { entityID: string }) {
   let rep = useReplicache();
 
   return (
@@ -90,7 +86,7 @@ function CardTextContent(props: { entityID: string }) {
           entity: props.entityID,
           attribute: "textContent",
           value: { type: "string", value: e.currentTarget.value },
-          position: content?.position || "a0",
+          positions: content?.positions || {},
         });
 
         textarea.current?.setSelectionRange(start, end);
@@ -127,7 +123,7 @@ function Title(props: { entityID: string }) {
           entity: props.entityID,
           attribute: "title",
           value: { type: "string", value: e.currentTarget.value },
-          position: title?.position || "a0",
+          positions: title?.positions || {},
         });
         input.current?.setSelectionRange(start, end);
       }}

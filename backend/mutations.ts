@@ -75,7 +75,7 @@ const createNewCard: Mutation<{
   position: string;
 }> = (args) => {
   let fact = {
-    position: args.position,
+    positions: { aev: args.position },
     entity: args.entity,
     attribute: "title",
     value: { type: "string", value: args.title },
@@ -99,20 +99,21 @@ const assertFact: Mutation<FactInput> = (args) => {
   };
 };
 
-const updatePosition: Mutation<{ factID: string; position: string }> = (
-  args
-) => {
+const updatePosition: Mutation<{
+  factID: string;
+  positions: { [k: string]: string };
+}> = (args) => {
   return {
     client: async (tx) => {
       let fact = (await tx.get(args.factID)) as Fact | undefined;
       if (!fact) return;
       tx.put(args.factID, {
         ...fact,
-        position: args.position,
+        positions: { ...fact.positions, ...args.positions },
       });
     },
     server: async (tx) => {
-      serverUpdateFact(tx, args.factID, { position: args.position });
+      serverUpdateFact(tx, args.factID, { positions: args.positions });
     },
   };
 };
@@ -139,7 +140,6 @@ const deleteCard: Mutation<{ cardID: string }> = (args) => {
 
 const createNewSection: Mutation<{
   unique: boolean;
-  position: string;
   cardinality: "one" | "many";
   name: string;
 }> = (args) => {
@@ -148,20 +148,20 @@ const createNewSection: Mutation<{
       let entity = ulid();
       await Promise.all([
         clientAssert(tx, {
-          position: args.position,
+          positions: {},
           entity,
           attribute: "name",
           value: { type: "string", value: args.name },
         }),
         clientAssert(tx, {
           entity,
-          position: "a",
+          positions: {},
           attribute: "unique",
           value: { type: "boolean", value: args.unique },
         }),
         clientAssert(tx, {
           entity,
-          position: "c",
+          positions: {},
           attribute: "cardinality",
           value: { type: "string", value: args.cardinality },
         }),
@@ -171,21 +171,21 @@ const createNewSection: Mutation<{
       let entity = ulid();
       await Promise.all([
         serverAssertFact(tx, {
-          position: args.position,
+          positions: {},
           entity,
           attribute: "name",
           value: { type: "string", value: args.name },
         }),
         serverAssertFact(tx, {
           entity,
-          position: generateKeyBetween(null, null),
+          positions: {},
           attribute: "unique",
           value: { type: "boolean", value: args.unique },
         }),
         console.log(
           serverAssertFact(tx, {
             entity,
-            position: generateKeyBetween(null, null),
+            positions: {},
             attribute: "cardinality",
             value: { type: "union", value: args.cardinality },
           })

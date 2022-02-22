@@ -92,7 +92,7 @@ export async function serverAssertFact(
 export async function serverUpdateFact(
   tx: DurableObjectStorage,
   fact: string,
-  data: Partial<Pick<Fact, "position" | "retracted">>
+  data: Partial<Pick<Fact, "positions" | "retracted">>
 ): Promise<Result> {
   let existingFact = await tx.get<Fact>(`factID-${fact}`);
   if (!existingFact)
@@ -106,9 +106,10 @@ export async function serverUpdateFact(
     };
 
   let lastUpdated = Date.now().toString();
-  let newFact = {
+  let newFact: Fact = {
     ...existingFact,
     ...data,
+    positions: { ...existingFact.positions, ...data.positions },
     lastUpdated,
   };
   writeFactToStorage(tx, newFact, {

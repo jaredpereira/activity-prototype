@@ -59,7 +59,7 @@ export type Fact = {
   id: string;
   lastUpdated: string;
   retracted?: boolean;
-  position: string;
+  positions: { [k: string]: string | undefined };
   entity: string;
   attribute: string;
   value: Value;
@@ -166,7 +166,7 @@ export class Counter implements DurableObject {
             ...f,
             value,
             id: ulid(),
-            position: positions[index],
+            positions: {},
             lastUpdated,
           };
           writeFactToStorage(this.state.storage, newData, {
