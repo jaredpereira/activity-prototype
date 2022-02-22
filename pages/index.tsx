@@ -1,27 +1,26 @@
 import type { NextPage } from "next";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useSubscribe } from "replicache-react";
-import { ulid } from "ulid";
 import { Fact } from "../backend";
-import { generateKeyBetween } from "../src/fractional-indexing";
 import { useReplicache } from "../src/useReplicache";
+import Link from "next/link";
 import { sortByPosition } from "../src/utils";
 
 const Home: NextPage = () => {
   return (
     <div className="text-center m-auto max-w-screen-md justify-items-center">
-      <CardList />
+      <DeckList />
     </div>
   );
 };
 
-function CardList() {
+function DeckList() {
   let rep = useReplicache();
   let entities = useSubscribe<Fact[]>(
     rep,
     async (tx) => {
       let entities = (await tx
-        .scan({ indexName: `aev`, prefix: "title" })
+        .scan({ indexName: `aev`, prefix: "deck" })
         .values()
         .toArray()) as Fact[];
 
@@ -30,68 +29,98 @@ function CardList() {
     []
   ).sort(sortByPosition("aev"));
 
+  let names = useSubscribe<Fact[]>(
+    rep,
+    async (tx) => {
+      let entities = (await tx
+        .scan({ indexName: `ave`, prefix: "name" })
+        .values()
+        .toArray()) as Fact[];
+
+      return entities;
+    },
+    []
+  ).sort(sortByPosition("aev"));
+  console.log(
+    names.map((f) => {
+      return {
+        name: f.value.value,
+        entity: f.entity,
+      };
+    })
+  );
+
   return (
     <ul className="grid gap-4 justify-items-center">
-      <NewCard firstEntity={entities[0]?.positions.aev} />
       {entities.map((e) => {
-        return <Card key={e.entity} entityID={e.entity} />;
+        return <Deck key={e.id} entityID={e.entity} />;
       })}
     </ul>
   );
 }
 
-function Card(props: { entityID: string }) {
+const Deck = (props: { entityID: string }) => {
   let rep = useReplicache();
-
-  return (
-    <div className="grid max-w-sm gap-4 p-4 border-2 border-black rounded-md">
-      <div>
-        <button
-          className="border-2 w-min px-2"
-          onClick={() => rep.mutate.deleteCard({ cardID: props.entityID })}
-        >
-          del
-        </button>
-      </div>
-      <Title entityID={props.entityID} />
-      <CardTextContent entityID={props.entityID} />
-    </div>
-  );
-}
-
-function CardTextContent(props: { entityID: string }) {
-  let textarea = useRef<HTMLTextAreaElement | null>(null);
-  let rep = useReplicache();
-  let content = useSubscribe<Fact | null>(
+  let name = useSubscribe(
     rep,
     async (tx) => {
-      let title = (await tx
-        .scan({ indexName: `eav`, prefix: `${props.entityID}-textContent` })
+      return tx
+        .scan({ indexName: "eav", prefix: `${props.entityID}-name` })
+        .values()
+        .toArray();
+    },
+    [],
+    []
+  ) as Fact[];
+
+  let cards = useSubscribe(
+    rep,
+    async (tx) => {
+      return tx
+        .scan({ indexName: "eav", prefix: `${props.entityID}-contains` })
+        .values()
+        .toArray();
+    },
+    [],
+    []
+  ) as Fact[];
+
+  if (!name[0]) return <div>no name</div>;
+  return (
+    <div>
+      <h3 className="text-xl">{name[0].value.value}</h3>
+      <ul>
+        {cards.map((c) => {
+          return <Card key={c.id} entityID={c.value.value as string} />;
+        })}
+      </ul>
+    </div>
+  );
+};
+
+function Card(props: { entityID: string }) {
+  let rep = useReplicache();
+  console.log(props.entityID);
+  let title = useSubscribe(
+    rep,
+    async (tx) => {
+      let fact = (await tx
+        .scan({ indexName: "eav", prefix: `${props.entityID}-name` })
         .values()
         .toArray()) as Fact[];
-      return title[0] || null;
+      console.log(fact);
+      if (fact[0]) return fact[0].value.value as string;
+      return "";
     },
-    null,
+    "",
     []
   );
   return (
-    <textarea
-      className="border-2 p-2"
-      ref={textarea}
-      value={(content?.value.value as string) || ""}
-      onChange={async (e) => {
-        let start = e.currentTarget.selectionStart,
-          end = e.currentTarget.selectionEnd;
-        await rep.mutate.assertFact({
-          entity: props.entityID,
-          attribute: "textContent",
-          value: { type: "string", value: e.currentTarget.value },
-          positions: content?.positions || {},
-        });
-
-        textarea.current?.setSelectionRange(start, end);
-      }}
-    />
+    <Link href={`/c/${props.entityID}`}>
+      <a>
+        <div className="border-2 rounded-md p-4"> {title}</div>
+      </a>
+    </Link>
   );
 }
 
@@ -128,43 +157,6 @@ function Title(props: { entityID: string }) {
         input.current?.setSelectionRange(start, end);
       }}
     />
-  );
-}
-
-function NewCard(props: { firstEntity: string | undefined }) {
-  let rep = useReplicache();
-  let [newTitle, setNewTitle] = useState("");
-  return (
-    <div>
-      <input
-        value={newTitle}
-        onChange={(e) => {
-          setNewTitle(e.currentTarget.value);
-        }}
-      />
-      <button
-        className="text-4xl justify-self-center"
-        onClick={async () => {
-          try {
-            let newPosition = generateKeyBetween(
-              null,
-              props.firstEntity || null
-            );
-            console.log(
-              await rep.mutate.createNewCard({
-                title: newTitle,
-                entity: ulid(),
-                position: newPosition,
-              })
-            );
-          } catch (e) {
-            console.log(e);
-          }
-        }}
-      >
-        +
-      </button>
-    </div>
   );
 }
 

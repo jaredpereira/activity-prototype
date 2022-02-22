@@ -2,7 +2,7 @@ import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { Mutations } from "./mutations";
 import { ulid } from "../src/ulid";
 import { writeFactToStorage } from "./writes";
-import { generateNKeysBetween } from "../src/fractional-indexing";
+import { init } from "./populate";
 
 export default {
   fetch: handleRequest,
@@ -66,6 +66,8 @@ export type Fact = {
 };
 
 export type Value =
+  | { type: "flag"; value: null }
+  | { type: "reference"; value: string }
   | { type: "union"; value: string }
   | {
       type: "string";
@@ -93,7 +95,7 @@ export const indexes = {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 25;
+  version = 28;
 
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
@@ -125,6 +127,7 @@ export class Counter implements DurableObject {
           { entity: e.type, attribute: "type", value: "union" },
           { entity: e.type, attribute: `union/value`, value: `string` },
           { entity: e.type, attribute: `union/value`, value: `union` },
+          { entity: e.type, attribute: `union/value`, value: `reference` },
           { entity: e.type, attribute: `union/value`, value: `boolean` },
 
           { entity: e["union/value"], attribute: "name", value: `union/value` },
@@ -135,55 +138,50 @@ export class Counter implements DurableObject {
           { entity: e.cardinatlity, attribute: "type", value: "union" },
           { entity: e.cardinatlity, attribute: "union/value", value: "many" },
           { entity: e.cardinatlity, attribute: "union/value", value: "one" },
-
-          { entity: e.title, attribute: "name", value: "title" },
-          { entity: e.title, attribute: "type", value: "string" },
-          { entity: e.title, attribute: "unique", value: true },
-
-          { entity: e.textContent, attribute: "name", value: "textContent" },
-          { entity: e.textContent, attribute: "type", value: "string" },
         ];
-        let positions = generateNKeysBetween(null, null, initialFacts.length);
 
         let lastUpdated = Date.now().toString();
-        initialFacts.forEach((f, index) => {
-          let attribute = initialFacts.find(
-            (initialFact) =>
-              initialFact.attribute === "name" &&
-              initialFact.value === f.attribute
-          );
-          if (!attribute)
-            throw new Error(
-              "tried to initialize with uninitialized attribute!"
+        await Promise.all(
+          initialFacts.map(async (f) => {
+            let attribute = initialFacts.find(
+              (initialFact) =>
+                initialFact.attribute === "name" &&
+                initialFact.value === f.attribute
             );
-          let value: Value =
-            f.attribute === "cardinality"
-              ? { type: "union", value: f.value as string }
-              : typeof f.value === `string`
-              ? { type: "string", value: f.value }
-              : { type: "boolean", value: f.value };
-          let newData: Fact = {
-            ...f,
-            value,
-            id: ulid(),
-            positions: {},
-            lastUpdated,
-          };
-          writeFactToStorage(this.state.storage, newData, {
-            cardinality:
-              (initialFacts.find(
+            if (!attribute)
+              throw new Error(
+                "tried to initialize with uninitialized attribute!"
+              );
+            let value: Value =
+              f.attribute === "cardinality"
+                ? { type: "union", value: f.value as string }
+                : typeof f.value === `string`
+                ? { type: "string", value: f.value }
+                : { type: "boolean", value: f.value };
+            let newData: Fact = {
+              ...f,
+              value,
+              id: ulid(),
+              positions: {},
+              lastUpdated,
+            };
+            await writeFactToStorage(this.state.storage, newData, {
+              cardinality:
+                (initialFacts.find(
+                  (f) =>
+                    f.entity === e[newData.attribute as keyof typeof e] &&
+                    f.attribute === "cardinality"
+                )?.value as "one" | "many") || "one",
+              unique: !!initialFacts.find(
                 (f) =>
                   f.entity === e[newData.attribute as keyof typeof e] &&
-                  f.attribute === "cardinality"
-              )?.value as "one" | "many") || "one",
-            unique: !!initialFacts.find(
-              (f) =>
-                f.entity === e[newData.attribute as keyof typeof e] &&
-                f.attribute === "unique" &&
-                f.value === true
-            ),
-          });
-        });
+                  f.attribute === "unique" &&
+                  f.value === true
+              ),
+            });
+          })
+        );
+        await init(this.state.storage);
       } catch (e) {
         console.log("CONSTRUCTOR ERROR", e);
       }
