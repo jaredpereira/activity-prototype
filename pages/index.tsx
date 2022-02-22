@@ -1,74 +1,12 @@
 import type { NextPage } from "next";
-import { useEffect, useRef, useState } from "react";
-import { Replicache, WriteTransaction } from "replicache";
+import { useRef, useState } from "react";
 import { useSubscribe } from "replicache-react";
-import { MyPullResponse } from "../backend";
-import { Mutations, processFact } from "../backend/mutations";
 import { ulid } from "ulid";
 import { Fact } from "../backend";
 import { generateKeyBetween } from "../src/fractional-indexing";
-
-type ReplicacheMutators = {
-  [k in keyof typeof Mutations]: (
-    tx: WriteTransaction,
-    args: Parameters<typeof Mutations[k]>[0]
-  ) => Promise<void>;
-};
-
-let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
-  acc[k] = async (tx: WriteTransaction, args: any) =>
-    Mutations[k as keyof typeof Mutations](args).client(tx);
-  return acc;
-}, {} as any);
-
-const rep = new Replicache({
-  name: "test-db2",
-  schemaVersion: `23`,
-  pushDelay: 500,
-  pullURL: "https://activity-prototype.awarm.workers.dev/pull",
-  pushURL: "https://activity-prototype.awarm.workers.dev/push",
-  puller: async (req) => {
-    let res = await fetch(req);
-    let data: MyPullResponse = await res.json();
-    let ops = data.data.map((fact) => {
-      if (fact.retracted)
-        return {
-          op: "del",
-          key: fact.id,
-        } as const;
-      return {
-        op: "put",
-        key: fact.id,
-        value: processFact(fact.id, fact, fact.meta.schema),
-      } as const;
-    });
-    return {
-      httpRequestInfo: { httpStatusCode: 200, errorMessage: "" },
-      response: {
-        lastMutationID: data.lastMutationID,
-        cookie: data.cookie,
-        patch: ops,
-      },
-    };
-  },
-  mutators,
-});
-
-rep.createIndex({ name: "eav", jsonPointer: "/indexes/eav" });
-rep.createIndex({ name: "aev", jsonPointer: "/indexes/aev" });
-rep.createIndex({ name: "ave", jsonPointer: "/indexes/ave" });
+import { useReplicache } from "../src/useReplicache";
 
 const Home: NextPage = () => {
-  let socket = useRef<WebSocket>();
-  useEffect(() => {
-    socket.current = new WebSocket(
-      `wss://activity-prototype.awarm.workers.dev/poke`
-    );
-    socket.current.addEventListener("message", () => {
-      rep.pull();
-    });
-  }, []);
-
   return (
     <div className="text-center m-auto max-w-screen-md justify-items-center">
       <CardList />
@@ -77,6 +15,7 @@ const Home: NextPage = () => {
 };
 
 function CardList() {
+  let rep = useReplicache();
   let entities = useSubscribe<Fact[]>(
     rep,
     async (tx) => {
@@ -106,6 +45,8 @@ function CardList() {
 }
 
 function Card(props: { entityID: string; position: string }) {
+  let rep = useReplicache();
+
   return (
     <div className="grid max-w-sm gap-4 p-4 border-2 border-black rounded-md">
       <div>
@@ -118,12 +59,59 @@ function Card(props: { entityID: string; position: string }) {
       </div>
       <Title entityID={props.entityID} />
       <CardTextContent entityID={props.entityID} />
+      <Sections entityID={props.entityID} />
     </div>
+  );
+}
+
+function Sections(props: { entityID: string }) {
+  let rep = useReplicache();
+  let sections = useSubscribe<Fact[]>(
+    rep,
+    async (tx) => {
+      return tx
+        .scan({ indexName: "eav", prefix: `${props.entityID}-section` })
+        .values()
+        .toArray() as Promise<Fact[]>;
+    },
+    [],
+    []
+  );
+  let [newSectionName, setNewSectionName] = useState("");
+  return (
+    <ul>
+      {sections.map((s) => (
+        <li>{s.value.value}</li>
+      ))}
+      <div style={{ display: "grid", gridTemplateColumns: "auto min-content" }}>
+        <input
+          className="border-2"
+          value={newSectionName}
+          onChange={(e) => setNewSectionName(e.currentTarget.value)}
+        />
+        <button
+          onClick={() => {
+            rep.mutate.assertFact({
+              position: generateKeyBetween(
+                sections[sections.length - 1]?.position || null,
+                null
+              ),
+              entity: ulid(),
+              attribute: "section",
+              value: { type: "string", value: newSectionName },
+            });
+          }}
+        >
+          add
+        </button>
+      </div>
+    </ul>
   );
 }
 
 function CardTextContent(props: { entityID: string }) {
   let textarea = useRef<HTMLTextAreaElement | null>(null);
+  let rep = useReplicache();
   let content = useSubscribe<Fact | null>(
     rep,
     async (tx) => {
@@ -159,6 +147,7 @@ function CardTextContent(props: { entityID: string }) {
 
 function Title(props: { entityID: string }) {
   let input = useRef<HTMLInputElement | null>(null);
+  let rep = useReplicache();
   let title = useSubscribe<Fact | null>(
     rep,
     async (tx) => {
