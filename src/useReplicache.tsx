@@ -19,15 +19,20 @@ let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
 let ReplicacheContext = createContext<Replicache<ReplicacheMutators> | null>(
   null
 );
+
+const workerURLS = {
+  production: "https://activity-prototype.awarm.workers.dev",
+  local: "http://localhost:8787",
+};
 export const ReplicacheProvider: React.FC = (props) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
   useEffect(() => {
     const rep = new Replicache({
       name: "test-db2",
-      schemaVersion: `25`,
+      schemaVersion: `27`,
       pushDelay: 500,
-      pullURL: "https://activity-prototype.awarm.workers.dev/pull",
-      pushURL: "https://activity-prototype.awarm.workers.dev/push",
+      pullURL: `${workerURLS.local}/pull`,
+      pushURL: `${workerURLS.local}/push`,
       puller: async (req) => {
         let res = await fetch(req);
         let data: MyPullResponse = await res.json();
