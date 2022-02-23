@@ -1,12 +1,11 @@
 import { ReadTransaction, WriteTransaction } from "replicache";
 import { FactInput, Fact } from ".";
-import { generateKeyBetween } from "../src/fractional-indexing";
 import { ulid } from "../src/ulid";
 import { Schema, serverAssertFact, serverUpdateFact } from "./writes";
 
 type Mutation<T> = (args: T) => {
-  client: (tx: WriteTransaction) => Promise<void>;
-  server: (tx: DurableObjectStorage) => Promise<void>;
+  client: (tx: WriteTransaction) => Promise<any>;
+  server: (tx: DurableObjectStorage) => Promise<any>;
 };
 
 export const processFact = (
@@ -54,26 +53,8 @@ export const clientGetSchema = async (
 };
 
 const clientAssert = async (tx: WriteTransaction, f: FactInput) => {
-  let attribute = (
-    await tx
-      .scan({ indexName: "ave", prefix: `name-${f.attribute}` })
-      .values()
-      .toArray()
-  )[0] as Fact | undefined;
-  if (!attribute) throw new Error(`no attribute ${f.attribute} found`);
-
-  let attributeFacts = (await tx
-    .scan({ indexName: "eav", prefix: `${attribute.entity}-unique` })
-    .values()
-    .toArray()) as Fact[];
-
-  let schema = {
-    unique: !!attributeFacts.find((f) => f.attribute === "unique")?.value
-      .value as boolean,
-    cardinality:
-      (attributeFacts.find((f) => f.attribute === "cardinality")?.value
-        .value as "one" | "many") || "one",
-  };
+  let schema = await clientGetSchema(tx, f.attribute);
+  if (!schema) throw new Error(`no attribute ${f.attribute} found`);
 
   let newID = ulid();
   if (schema.cardinality === "one") {
@@ -164,67 +145,36 @@ const deleteCard: Mutation<{ cardID: string }> = (args) => {
   };
 };
 
-const createNewSection: Mutation<{
-  unique: boolean;
-  cardinality: "one" | "many";
-  name: string;
+const addCardToSection: Mutation<{
+  entity: string;
+  section: string;
+  position: string;
+  newCard: string;
 }> = (args) => {
   return {
     client: async (tx) => {
-      let entity = ulid();
-      await Promise.all([
-        clientAssert(tx, {
-          positions: {},
-          entity,
-          attribute: "name",
-          value: { type: "string", value: args.name },
-        }),
-        clientAssert(tx, {
-          entity,
-          positions: {},
-          attribute: "unique",
-          value: { type: "boolean", value: args.unique },
-        }),
-        clientAssert(tx, {
-          entity,
-          positions: {},
-          attribute: "cardinality",
-          value: { type: "string", value: args.cardinality },
-        }),
-      ]);
+      return clientAssert(tx, {
+        entity: args.entity,
+        attribute: args.section,
+        value: { type: "reference", value: args.newCard },
+        positions: { eav: args.position },
+      });
     },
     server: async (tx) => {
-      let entity = ulid();
-      await Promise.all([
-        serverAssertFact(tx, {
-          positions: {},
-          entity,
-          attribute: "name",
-          value: { type: "string", value: args.name },
-        }),
-        serverAssertFact(tx, {
-          entity,
-          positions: {},
-          attribute: "unique",
-          value: { type: "boolean", value: args.unique },
-        }),
-        console.log(
-          serverAssertFact(tx, {
-            entity,
-            positions: {},
-            attribute: "cardinality",
-            value: { type: "union", value: args.cardinality },
-          })
-        ),
-      ]);
+      return serverAssertFact(tx, {
+        entity: args.entity,
+        attribute: args.section,
+        value: { type: "reference", value: args.newCard },
+        positions: { eav: args.position },
+      });
     },
   };
 };
 
 export const Mutations = {
   createNewCard,
+  addCardToSection,
   assertFact,
   deleteCard,
   updatePosition,
-  createNewSection,
 };

@@ -7,7 +7,7 @@ export function Card(props: { entityID: string }) {
   return (
     <Link href={`/c/${props.entityID}`}>
       <a>
-        <div className="border-2 rounded-md p-4 max-w-md">
+        <div className="border-2 rounded-md p-4 w-64">
           <h3 className="text-xl">{title?.value.value}</h3>
           {content?.value.value}
         </div>

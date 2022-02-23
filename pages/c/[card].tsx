@@ -1,16 +1,14 @@
 import { useRouter } from "next/router";
-import { useRef } from "react";
-import { useSubscribe } from "replicache-react";
-import { clientGetSchema } from "../../backend/mutations";
+import React, { useRef, useState } from "react";
 import { useFact, useReplicache } from "../../src/useReplicache";
 import { sortByPosition } from "../../src/utils";
-import { Card } from "../../src/components/Card";
+import { Section } from "../../src/components/Section";
 
 export default function CardPage() {
   let router = useRouter();
   let entityID = router.query.card as string;
   return (
-    <div>
+    <div className="grid">
       <Title entityID={entityID} />
       <TextContent entityID={entityID} />
       <Sections entityID={entityID} />
@@ -20,7 +18,27 @@ export default function CardPage() {
 
 const Title = (props: { entityID: string }) => {
   let title = useFact("eav", `${props.entityID}-name`)[0];
-  return <h3 className="text-2xl">{title?.value.value || "Untitled"}</h3>;
+  let inputEl = useRef<null | HTMLInputElement>(null);
+  let rep = useReplicache();
+  return (
+    <input
+      ref={inputEl}
+      className="text-2xl"
+      value={(title?.value.value as string) || ""}
+      placeholder="Untitled"
+      onChange={async (e) => {
+        let start = e.currentTarget.selectionStart,
+          end = e.currentTarget.selectionEnd;
+        await rep.mutate.assertFact({
+          entity: props.entityID,
+          attribute: "name",
+          value: { type: "string", value: e.currentTarget.value },
+          positions: title?.positions || {},
+        });
+        inputEl.current?.setSelectionRange(start, end);
+      }}
+    />
+  );
 };
 
 const TextContent = (props: { entityID: string }) => {
@@ -62,28 +80,38 @@ const Sections = (props: { entityID: string }) => {
           section={section.value.value as string}
         />
       ))}
+      <AddSection entityID={props.entityID} />
     </ul>
   );
 };
 
-const Section = (props: { entityID: string; section: string }) => {
-  let rep = useReplicache();
-  let facts = useFact("eav", `${props.entityID}-${props.section}`);
-  let schema = useSubscribe(
-    rep,
-    async (tx) => {
-      return (await clientGetSchema(tx, props.section)) || null;
-    },
-    null,
-    []
-  );
+const AddSection = (props: { entityID: string }) => {
+  let [state, setState] = useState({
+    open: false,
+    type: "text" as "text" | "cards",
+  });
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log(props);
+  };
+
+  if (!state.open)
+    return (
+      <button onClick={() => setState({ ...state, open: true })}>
+        add section
+      </button>
+    );
 
   return (
-    <div>
-      <h3 className="text-xl">{props.section}</h3>
-      {schema?.type === "reference"
-        ? facts.map((m) => <Card entityID={m.value.value as string} />)
-        : facts.map((m) => <div>{m.value.value}</div>)}
-    </div>
+    <form onSubmit={onSubmit}>
+      name: <input />
+      <br />
+      type: <input />
+      <button type="submit"> add</button>
+      <button onClick={() => setState({ ...state, open: false })}>
+        {" "}
+        cancel
+      </button>
+    </form>
   );
 };
