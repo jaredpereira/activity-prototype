@@ -4,7 +4,15 @@ type Result =
   | { error: false; result: Fact }
   | { error: true; message: string; data?: any };
 
-async function getAttributeSchema(tx: DurableObjectStorage, attribute: string) {
+export type Schema = {
+  cardinality: "one" | "many";
+  unique: boolean;
+  type: Fact["value"]["type"];
+};
+async function getAttributeSchema(
+  tx: DurableObjectStorage,
+  attribute: string
+): Promise<Schema | undefined> {
   let attributeFact = await tx.get<Fact>(`av-name-${attribute}`);
   if (!attributeFact) return;
 

@@ -3,6 +3,10 @@ import { ulid } from "../src/ulid";
 import { serverAssertFact } from "./writes";
 
 const Sections = {
+  section: {
+    type: "string",
+    cardinality: "many",
+  },
   contains: {
     type: "reference",
     cardinality: "many",
@@ -105,9 +109,26 @@ export const init = async (tx: DurableObjectStorage) => {
             positions: { eav: positions[index] },
           });
 
+          let attributes = Object.keys(card);
+          let sectionPositions = generateNKeysBetween(
+            null,
+            null,
+            attributes.length
+          );
           return Promise.all(
-            Object.keys(card).map(async (a) => {
+            attributes.map(async (a, attributeIndex) => {
               let value = card[a as keyof typeof card];
+              if (a !== "name") {
+                await serverAssertFact(tx, {
+                  entity: cardEntity,
+                  attribute: "section",
+                  value: {
+                    type: "string",
+                    value: a,
+                  },
+                  positions: { eav: sectionPositions[attributeIndex] },
+                });
+              }
               if (typeof value === "string")
                 return serverAssertFact(tx, {
                   entity: cardEntity,

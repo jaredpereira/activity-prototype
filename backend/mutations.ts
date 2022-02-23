@@ -1,16 +1,12 @@
-import { WriteTransaction } from "replicache";
+import { ReadTransaction, WriteTransaction } from "replicache";
 import { FactInput, Fact } from ".";
 import { generateKeyBetween } from "../src/fractional-indexing";
 import { ulid } from "../src/ulid";
-import { serverAssertFact, serverUpdateFact } from "./writes";
+import { Schema, serverAssertFact, serverUpdateFact } from "./writes";
 
 type Mutation<T> = (args: T) => {
   client: (tx: WriteTransaction) => Promise<void>;
   server: (tx: DurableObjectStorage) => Promise<void>;
-};
-
-type Schema = {
-  unique: boolean;
 };
 
 export const processFact = (
@@ -25,6 +21,36 @@ export const processFact = (
   };
 
   return { ...f, indexes };
+};
+
+export const clientGetSchema = async (
+  tx: ReadTransaction,
+  attributeName: string
+) => {
+  let attribute = (
+    await tx
+      .scan({ indexName: "ave", prefix: `name-${attributeName}` })
+      .values()
+      .toArray()
+  )[0] as Fact;
+  if (!attribute) return;
+
+  let attributeFacts = (await tx
+    .scan({ indexName: "eav", prefix: `${attribute.entity}` })
+    .values()
+    .toArray()) as Fact[];
+
+  let schema: Schema = {
+    type:
+      (attributeFacts.find((f) => f.attribute === "type")?.value
+        .value as Fact["value"]["type"]) || "string",
+    unique: !!attributeFacts.find((f) => f.attribute === "unique")?.value
+      .value as boolean,
+    cardinality:
+      (attributeFacts.find((f) => f.attribute === "cardinality")?.value
+        .value as "one" | "many") || "one",
+  };
+  return schema;
 };
 
 const clientAssert = async (tx: WriteTransaction, f: FactInput) => {

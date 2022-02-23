@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
-import { MyPullResponse } from "../backend";
+import { useSubscribe } from "replicache-react";
+import { Fact, MyPullResponse } from "../backend";
 import { Mutations, processFact } from "../backend/mutations";
 
 type ReplicacheMutators = {
@@ -78,4 +79,14 @@ export const useReplicache = () => {
   if (c === null)
     throw new Error("useCtx must be inside a Provider with a value");
   return c;
+};
+
+export const useFact = (index: string, prefix: string) => {
+  let rep = useReplicache();
+  return useSubscribe(
+    rep,
+    (tx) => tx.scan({ indexName: index, prefix }).values().toArray(),
+    [],
+    [index, prefix]
+  ) as Fact[];
 };
