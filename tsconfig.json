@@ -5,6 +5,7 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "types": ["@cloudflare/workers-types"],
     "allowJs": true,
+    "baseUrl": ".",
     "skipLibCheck": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
