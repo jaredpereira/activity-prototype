@@ -1,12 +1,12 @@
 import type { NextPage } from "next";
 import { useFact, useReplicache } from "../src/useReplicache";
-import Link from "next/link";
 import { sortByPosition } from "../src/utils";
 import React from "react";
 import { Card } from "../src/components/Card";
 import { generateKeyBetween } from "src/fractional-indexing";
 import { ulid } from "src/ulid";
 import { useRouter } from "next/router";
+import { NewDeck } from "src/components/NewDeck";
 
 const Home: NextPage = () => {
   return (
@@ -18,13 +18,14 @@ const Home: NextPage = () => {
 
 function DeckList() {
   let entities = useFact("aev", "deck").sort(sortByPosition("aev"));
-  console.log(entities);
   return (
     <ul className="grid gap-4 justify-items-center">
       {entities.map((e) => {
         return <Deck key={e.id} entityID={e.entity} />;
       })}
+      <NewDeck position={generateKeyBetween(entities[entities.length - 1]?.positions.aev || null, null)} />
     </ul>
+
   );
 }
 
@@ -41,7 +42,7 @@ const Deck = (props: { entityID: string }) => {
       entity: props.entityID,
       section: "contains",
       position: generateKeyBetween(
-        cards[cards.length - 1].positions.eav || null,
+        cards[cards.length - 1]?.positions.eav || null,
         null
       ),
     });
