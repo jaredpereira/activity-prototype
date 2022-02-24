@@ -8,7 +8,7 @@ import { useFact, useReplicache } from "src/useReplicache";
 import { Card } from "src/components/Card";
 import { sortByPosition } from "src/utils";
 
-export const Section = (props: { entityID: string; section: string }) => {
+export const Section = (props: { entityID: string; section: string, new?: boolean }) => {
   let rep = useReplicache();
   let schema = useSubscribe(
     rep,
@@ -27,20 +27,19 @@ export const Section = (props: { entityID: string; section: string }) => {
   return <SingleTextSection {...props} />;
 };
 
-const SingleTextSection = (props: { entityID: string; section: string }) => {
+const SingleTextSection = (props: { entityID: string; section: string, new?: boolean }) => {
   let rep = useReplicache();
   let fact = useFact("eav", `${props.entityID}-${props.section}`)[0];
   let inputEl = useRef<HTMLInputElement | null>(null);
-
-  console.log(fact);
 
   return (
     <div>
       <h3 className="text-xl"> {props.section} </h3>
       <input
+        autoFocus={props.new}
         ref={inputEl}
         className="w-full"
-        value={fact?.value.value as string}
+        value={fact?.value.value as string || ''}
         onChange={async (e) => {
           let start = e.currentTarget.selectionStart,
             end = e.currentTarget.selectionEnd;
@@ -64,12 +63,10 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
     sortByPosition("eav")
   );
 
-  console.log(facts.map((f) => f.positions));
 
-  const addCard = async () => {
-    let newCard = ulid();
+  const onAdd = async (id: string) => {
     await rep.mutate.addCardToSection({
-      newCard,
+      newCard: id,
       entity: props.entityID,
       section: props.section,
       position: generateKeyBetween(
@@ -77,17 +74,24 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
         null
       ),
     });
-    router.push(`/c/${newCard}`);
+    router.push(`/c/${id}`);
   };
   return (
     <div>
       <h3 className="text-xl"> {props.section} </h3>
       <div className="flex flex-row gap-x-4 flex-wrap">
         {facts.map((m) => (
-          <Card entityID={m.value.value as string} />
+          <Card key={m.id} entityID={m.value.value as string} />
         ))}
-        <button onClick={() => addCard()}> add </button>
       </div>
+      <AddCardButton onAdd={onAdd} />
     </div>
   );
 };
+
+export const AddCardButton = (props: { onAdd: (id: string) => void }) => {
+  return <button onClick={() => {
+    let newCard = ulid();
+    props.onAdd(newCard)
+  }}> add </button>
+}

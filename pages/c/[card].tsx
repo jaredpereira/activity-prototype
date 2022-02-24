@@ -3,6 +3,8 @@ import React, { useRef, useState } from "react";
 import { useFact, useReplicache } from "../../src/useReplicache";
 import { sortByPosition } from "../../src/utils";
 import { Section } from "../../src/components/Section";
+import { AddSection } from "src/components/NewSection";
+import { generateKeyBetween } from "src/fractional-indexing";
 
 export default function CardPage() {
   let router = useRouter();
@@ -68,50 +70,35 @@ const TextContent = (props: { entityID: string }) => {
 };
 
 const Sections = (props: { entityID: string }) => {
+  let [newSection, setNewSection] = useState("");
+  let rep = useReplicache();
   let sections = useFact("eav", `${props.entityID}-section`).sort(
     sortByPosition("eav")
   );
+  console.log(sections.map(s => s.positions))
+
   return (
     <ul>
       {sections.map((section) => (
         <Section
+          new={newSection === section.value.value}
           key={section.id}
           entityID={props.entityID}
           section={section.value.value as string}
         />
       ))}
-      <AddSection entityID={props.entityID} />
+      <AddSection
+        createNewSection={async (args) => {
+          setNewSection(args.name);
+          await rep.mutate.addNewSection({
+            name: args.name,
+            type: args.type,
+            firstValue: args.initialValue,
+            cardEntity: props.entityID,
+            position: generateKeyBetween(sections[sections.length - 1]?.positions.eav || null, null)
+          });
+        }}
+      />
     </ul>
-  );
-};
-
-const AddSection = (props: { entityID: string }) => {
-  let [state, setState] = useState({
-    open: false,
-    type: "text" as "text" | "cards",
-  });
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log(props);
-  };
-
-  if (!state.open)
-    return (
-      <button onClick={() => setState({ ...state, open: true })}>
-        add section
-      </button>
-    );
-
-  return (
-    <form onSubmit={onSubmit}>
-      name: <input />
-      <br />
-      type: <input />
-      <button type="submit"> add</button>
-      <button onClick={() => setState({ ...state, open: false })}>
-        {" "}
-        cancel
-      </button>
-    </form>
   );
 };

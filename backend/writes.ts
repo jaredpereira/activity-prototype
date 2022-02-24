@@ -9,7 +9,7 @@ export type Schema = {
   unique: boolean;
   type: Fact["value"]["type"];
 };
-async function getAttributeSchema(
+export async function serverGetSchema(
   tx: DurableObjectStorage,
   attribute: string
 ): Promise<Schema | undefined> {
@@ -47,7 +47,7 @@ export async function serverAssertFact(
   tx: DurableObjectStorage,
   factInput: FactInput
 ): Promise<Result> {
-  let schema = await getAttributeSchema(tx, factInput.attribute);
+  let schema = await serverGetSchema(tx, factInput.attribute);
   if (!schema)
     return {
       error: true,
@@ -106,7 +106,7 @@ export async function serverUpdateFact(
   if (!existingFact)
     return { error: true, message: `No fact with id ${fact} exists` };
 
-  let schema = await getAttributeSchema(tx, existingFact.attribute);
+  let schema = await serverGetSchema(tx, existingFact.attribute);
   if (!schema)
     return {
       error: true,
