@@ -7,9 +7,11 @@ export function Card(props: { entityID: string }) {
   return (
     <Link href={`/c/${props.entityID}`}>
       <a>
-        <div className="border-2 rounded-md p-4 w-64">
-          <h3 className="text-xl">{title?.value.value}</h3>
-          {content?.value.value}
+        <div className="border-2 rounded-md p-4 w-64 h-80 overflow-scroll overflow-x-hidden grid gap-2">
+          <h3 className={`${!content?.value.value ? "text-4xl" : "text-xl"}`}>
+            {title?.value.value}
+          </h3>
+          <pre className="whitespace-pre-wrap">{content?.value.value}</pre>
         </div>
       </a>
     </Link>

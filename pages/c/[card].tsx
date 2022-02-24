@@ -10,7 +10,7 @@ export default function CardPage() {
   let router = useRouter();
   let entityID = router.query.card as string;
   return (
-    <div className="grid">
+    <div className="grid gap-4">
       <Title entityID={entityID} />
       <TextContent entityID={entityID} />
       <Sections entityID={entityID} />
@@ -75,10 +75,9 @@ const Sections = (props: { entityID: string }) => {
   let sections = useFact("eav", `${props.entityID}-section`).sort(
     sortByPosition("eav")
   );
-  console.log(sections.map(s => s.positions))
 
   return (
-    <ul>
+    <div className="grid gap-4">
       {sections.map((section) => (
         <Section
           new={newSection === section.value.value}
@@ -95,10 +94,13 @@ const Sections = (props: { entityID: string }) => {
             type: args.type,
             firstValue: args.initialValue,
             cardEntity: props.entityID,
-            position: generateKeyBetween(sections[sections.length - 1]?.positions.eav || null, null)
+            position: generateKeyBetween(
+              sections[sections.length - 1]?.positions.eav || null,
+              null
+            ),
           });
         }}
       />
-    </ul>
+    </div>
   );
 };

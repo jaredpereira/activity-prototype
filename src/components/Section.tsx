@@ -8,7 +8,11 @@ import { useFact, useReplicache } from "src/useReplicache";
 import { Card } from "src/components/Card";
 import { sortByPosition } from "src/utils";
 
-export const Section = (props: { entityID: string; section: string, new?: boolean }) => {
+export const Section = (props: {
+  entityID: string;
+  section: string;
+  new?: boolean;
+}) => {
   let rep = useReplicache();
   let schema = useSubscribe(
     rep,
@@ -27,7 +31,11 @@ export const Section = (props: { entityID: string; section: string, new?: boolea
   return <SingleTextSection {...props} />;
 };
 
-const SingleTextSection = (props: { entityID: string; section: string, new?: boolean }) => {
+const SingleTextSection = (props: {
+  entityID: string;
+  section: string;
+  new?: boolean;
+}) => {
   let rep = useReplicache();
   let fact = useFact("eav", `${props.entityID}-${props.section}`)[0];
   let inputEl = useRef<HTMLInputElement | null>(null);
@@ -39,7 +47,7 @@ const SingleTextSection = (props: { entityID: string; section: string, new?: boo
         autoFocus={props.new}
         ref={inputEl}
         className="w-full"
-        value={fact?.value.value as string || ''}
+        value={(fact?.value.value as string) || ""}
         onChange={async (e) => {
           let start = e.currentTarget.selectionStart,
             end = e.currentTarget.selectionEnd;
@@ -63,7 +71,6 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
     sortByPosition("eav")
   );
 
-
   const onAdd = async (id: string) => {
     await rep.mutate.addCardToSection({
       newCard: id,
@@ -83,15 +90,23 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
         {facts.map((m) => (
           <Card key={m.id} entityID={m.value.value as string} />
         ))}
+        <AddCardButton onAdd={onAdd} />
       </div>
-      <AddCardButton onAdd={onAdd} />
     </div>
   );
 };
 
 export const AddCardButton = (props: { onAdd: (id: string) => void }) => {
-  return <button onClick={() => {
-    let newCard = ulid();
-    props.onAdd(newCard)
-  }}> add </button>
-}
+  return (
+    <button
+      className="text-8xl"
+      onClick={() => {
+        let newCard = ulid();
+        props.onAdd(newCard);
+      }}
+    >
+      {" "}
+      +{" "}
+    </button>
+  );
+};
