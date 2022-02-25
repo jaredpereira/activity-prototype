@@ -88,7 +88,7 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
       <h3 className="text-xl"> {props.section} </h3>
       <div className="flex flex-row gap-x-4 flex-wrap">
         {facts.map((m) => (
-          <Card key={m.id} entityID={m.value.value as string} />
+          <Card key={m.id} href={`/c/${m.value.value}`} entityID={m.value.value as string} />
         ))}
         <AddCardButton onAdd={onAdd} />
       </div>

@@ -23,9 +23,13 @@ function DeckList() {
       {entities.map((e) => {
         return <Deck key={e.id} entityID={e.entity} />;
       })}
-      <NewDeck position={generateKeyBetween(entities[entities.length - 1]?.positions.aev || null, null)} />
+      <NewDeck
+        position={generateKeyBetween(
+          entities[entities.length - 1]?.positions.aev || null,
+          null
+        )}
+      />
     </ul>
-
   );
 }
 
@@ -55,7 +59,13 @@ const Deck = (props: { entityID: string }) => {
       <h3 className="text-xl">{name[0].value.value}</h3>
       <div className="flex flex-row flex-wrap gap-4">
         {cards.map((c) => {
-          return <Card key={c.id} entityID={c.value.value as string} />;
+          return (
+            <Card
+              key={c.id}
+              href={`/c/${props.entityID}?position=${c.value.value}`}
+              entityID={c.value.value as string}
+            />
+          );
         })}
         <button onClick={() => addCard()}>add</button>
       </div>
