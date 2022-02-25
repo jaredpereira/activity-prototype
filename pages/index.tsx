@@ -51,6 +51,7 @@ const Deck = (props: { entityID: string }) => {
       ),
     });
     router.push(`/c/${newCard}`);
+    router.push(`/c/${props.entityID}?position=${newCard}`);
   };
 
   if (!name[0]) return <div>no name</div>;

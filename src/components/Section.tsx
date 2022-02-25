@@ -81,7 +81,7 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
         null
       ),
     });
-    router.push(`/c/${id}`);
+    router.push(`/c/${props.entityID}/${props.section}?position=${id}`);
   };
   return (
     <div>
