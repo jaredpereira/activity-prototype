@@ -23,7 +23,7 @@ let ReplicacheContext = createContext<Replicache<ReplicacheMutators> | null>(
 
 const workerURLS = {
   production: "https://activity-prototype.awarm.workers.dev",
-  local: "http://localhost:8787",
+  local: "http://192.168.1.45:8787",
 };
 export const ReplicacheProvider: React.FC = (props) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
@@ -32,8 +32,8 @@ export const ReplicacheProvider: React.FC = (props) => {
       name: "test-db2",
       schemaVersion: `27`,
       pushDelay: 500,
-      pullURL: `${workerURLS.local}/pull`,
-      pushURL: `${workerURLS.local}/push`,
+      pullURL: `${workerURLS.production}/pull`,
+      pushURL: `${workerURLS.production}/push`,
       puller: async (req) => {
         let res = await fetch(req);
         let data: MyPullResponse = await res.json();
