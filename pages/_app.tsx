@@ -8,11 +8,22 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ReplicacheProvider>
       <Socket />
+      <Component {...pageProps} />
+      <Nav />
+    </ReplicacheProvider>
+  );
+}
+
+function Nav() {
+  return (
+    <div style={{ bottom: '16px', width: "100%", maxWidth: '800px' }} className=" p-4 border-2 grid grid-flow-col gap-1 auto-cols-min justify-center absolute">
       <Link href="/">
         <a>home</a>
       </Link>
-      <Component {...pageProps} />
-    </ReplicacheProvider>
+      <Link href="/chat">
+        <a>chat</a>
+      </Link>
+    </div>
   );
 }
 
