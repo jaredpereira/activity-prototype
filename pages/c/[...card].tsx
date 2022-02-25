@@ -22,9 +22,11 @@ const Deck = (props: { entityID: string, section?: string }) => {
   let router = useRouter();
   let Name = useFact("eav", `${props.entityID}-name`)[0];
   let queryPosition = router.query.position as string;
-  let Cards = useFact("eav", `${props.entityID}-contains`).sort(
-    sortByPosition("eav")
-  );
+  let Cards = useFact("eav", props.section
+    ? `${props.entityID}-${props.section}`
+    : `${props.entityID}-contains`).sort(
+      sortByPosition("eav")
+    );
 
   let deck = !!useFact("eav", `${props.entityID}-deck`)[0]
   useEffect(() => {
@@ -32,11 +34,11 @@ const Deck = (props: { entityID: string, section?: string }) => {
     if (index !== -1) setPosition(index);
   }, [Cards, queryPosition]);
 
-  if (!deck) return <CardPage entityID={props.entityID} />
+  if (!deck && !props.section) return <CardPage entityID={props.entityID} />
 
   return (
     <div>
-      <h3 className="text-4xl">{Name?.value.value}</h3>
+      <h3 className="text-4xl">{`${Name?.value.value}${props.section ? `/${props.section}` : ""}`}</h3>
       <DeckFrame
         position={position}
         length={Cards.length}
