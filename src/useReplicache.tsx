@@ -86,7 +86,10 @@ export const useFact = (index: string, prefix: string) => {
   let rep = useReplicache();
   return useSubscribe(
     rep,
-    (tx) => tx.scan({ indexName: index, prefix }).values().toArray(),
+    async (tx) => {
+      if (!prefix) return [] as Fact[]
+      return tx.scan({ indexName: index, prefix }).values().toArray()
+    },
     [],
     [index, prefix]
   ) as Fact[];
