@@ -93,6 +93,7 @@ export async function serverAssertFact(
   writeFactToStorage(tx, fact, {
     unique: schema.unique,
     cardinality: schema.cardinality,
+    type: schema.type,
   });
   return { error: false, result: fact };
 }
@@ -123,6 +124,7 @@ export async function serverUpdateFact(
   writeFactToStorage(tx, newFact, {
     unique: schema.unique,
     cardinality: schema.cardinality,
+    type: schema.type,
   });
 
   return { error: false, result: newFact };
@@ -134,7 +136,7 @@ export async function serverUpdateFact(
 export async function writeFactToStorage(
   tx: DurableObjectStorage,
   f: Fact,
-  schema: { unique: boolean; cardinality: "many" | "one" }
+  schema: Schema
 ) {
   let existingFact = await tx.get<Fact>(indexes.factID(f.id));
   if (existingFact) {

@@ -1,7 +1,7 @@
 import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { Mutations } from "./mutations";
 import { ulid } from "../src/ulid";
-import { writeFactToStorage } from "./writes";
+import { Schema, writeFactToStorage } from "./writes";
 import { init } from "./populate";
 
 export default {
@@ -82,7 +82,7 @@ export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
   cookie?: Cookie;
-  data: (Fact & { meta: { schema: { unique: boolean } } })[];
+  data: (Fact & { meta: { schema: Schema } })[];
 };
 
 export const indexes = {

@@ -5,6 +5,7 @@ import { sortByPosition } from "../../src/utils";
 import { Section } from "../../src/components/Section";
 import { AddSection } from "src/components/NewSection";
 import { generateKeyBetween } from "src/fractional-indexing";
+import { Card } from "src/components/Card";
 
 export default function DeckPage() {
   let router = useRouter();
@@ -56,6 +57,7 @@ function CardPage(props: { entityID: string }) {
       <Title entityID={props.entityID} />
       <TextContent entityID={props.entityID} />
       <Sections entityID={props.entityID} />
+      <References entityID={props.entityID} />
     </div>
   );
 }
@@ -87,6 +89,25 @@ const CardCounter = (props: {
     </div>
   );
 };
+
+const References = (props: { entityID: string }) => {
+  const references = useFact("vae", props.entityID).filter(
+    (f) => f.attribute !== "contains"
+  );
+  return (
+    <div>
+      <hr />
+      <h2 className="text-2xl">References</h2>
+      {references.map((f) => (
+        <div>
+          <h3>{f.attribute}</h3>
+          <Card href={`/c/${f.entity}`} entityID={f.entity} />
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const Title = (props: { entityID: string }) => {
   let title = useFact("eav", `${props.entityID}-name`)[0];
   let inputEl = useRef<null | HTMLInputElement>(null);

@@ -23,6 +23,7 @@ export const processFact = (
     eav: `${f.entity}-${f.attribute}-${id}`,
     aev: `${f.attribute}-${f.entity}-${id}`,
     ave: schema.unique ? `${f.attribute}-${f.value.value}` : "",
+    vae: schema.type === "reference" ? `${f.value.value}-${f.attribute}` : "",
   };
 
   return { ...f, indexes };

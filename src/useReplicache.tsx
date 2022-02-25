@@ -64,6 +64,7 @@ export const ReplicacheProvider: React.FC = (props) => {
     rep.createIndex({ name: "eav", jsonPointer: "/indexes/eav" });
     rep.createIndex({ name: "aev", jsonPointer: "/indexes/aev" });
     rep.createIndex({ name: "ave", jsonPointer: "/indexes/ave" });
+    rep.createIndex({ name: "vae", jsonPointer: "/indexes/vae" });
     setRep(rep);
   }, []);
 
