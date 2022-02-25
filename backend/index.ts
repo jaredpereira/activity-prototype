@@ -70,13 +70,13 @@ export type Value =
   | { type: "reference"; value: string }
   | { type: "union"; value: string }
   | {
-      type: "string";
-      value: string;
-    }
+    type: "string";
+    value: string;
+  }
   | {
-      type: "boolean";
-      value: boolean;
-    };
+    type: "boolean";
+    value: boolean;
+  };
 
 export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
@@ -156,8 +156,8 @@ export class Counter implements DurableObject {
               f.attribute === "cardinality"
                 ? { type: "union", value: f.value as string }
                 : typeof f.value === `string`
-                ? { type: "string", value: f.value }
-                : { type: "boolean", value: f.value };
+                  ? { type: "string", value: f.value }
+                  : { type: "boolean", value: f.value };
             let newData: Fact = {
               ...f,
               value,
@@ -166,6 +166,11 @@ export class Counter implements DurableObject {
               lastUpdated,
             };
             await writeFactToStorage(this.state.storage, newData, {
+              type: (initialFacts.find(
+                (f) =>
+                  f.entity === e[newData.attribute as keyof typeof e] &&
+                  f.attribute === "type"
+              )?.value as Schema["type"]) || "string",
               cardinality:
                 (initialFacts.find(
                   (f) =>
@@ -224,7 +229,7 @@ export class Counter implements DurableObject {
     }
   }
 
-  async pull(request: Request) {
+  async pull(request: Request): Promise<Response> {
     try {
       let data: PullRequest = await request.json();
       let cookie = data.cookie as Cookie | null;
@@ -234,7 +239,7 @@ export class Counter implements DurableObject {
         )) || 0;
 
       let map = await this.state.storage.list<
-        Fact & { meta: { schema: { unique: boolean } } }
+        Fact & { meta: { schema: Schema } }
       >({
         prefix: `ti`,
         start: `ti-${cookie?.lastUpdated || ""}`,
@@ -262,7 +267,20 @@ export class Counter implements DurableObject {
       });
     } catch (e) {
       console.log(e);
+      new Response(JSON.stringify(e), {
+        status: 400,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Content-Type": "application/json;charset=UTF-8",
+        },
+      })
     }
+    return new Response(JSON.stringify({ msg: "shouldn't reach here" }), {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json;charset=UTF-8",
+      },
+    });
   }
 
   async push(request: Request) {
