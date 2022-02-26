@@ -83,8 +83,9 @@ const SectionNameSelector = (props: {
     query === ""
       ? props.sections
       : props.sections.filter((section) => {
-          return section.toLowerCase().includes(query.toLowerCase());
-        });
+        return section.toLowerCase().includes(query.toLowerCase());
+      });
+  if (!filteredSections.includes(query)) filteredSections.push(query);
 
   return (
     <div>
@@ -94,14 +95,13 @@ const SectionNameSelector = (props: {
           placeholder="New Section"
           onChange={(event) => setQuery(event.target.value)}
         />
-        <Combobox.Options className="absolute bg-white p-2 border-2">
-          {[query, ...filteredSections].map((section) => (
+        <Combobox.Options className="bg-white p-2 border-2">
+          {filteredSections.map((section) => (
             <Combobox.Option key={section} value={section}>
               {({ active }) => (
                 <span
-                  className={`${
-                    active ? "bg-blue-500 text-white" : "bg-white text-black"
-                  }`}
+                  className={`${active ? "bg-blue-500 text-white" : "bg-white text-black"
+                    }`}
                 >
                   {section}
                 </span>
