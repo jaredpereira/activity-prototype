@@ -1,7 +1,7 @@
 import type { NextPage } from "next";
 import { useFact, useReplicache } from "../src/useReplicache";
 import { sortByPosition } from "../src/utils";
-import React from "react";
+import React, { useState } from "react";
 import { Card } from "../src/components/Card";
 import { generateKeyBetween } from "src/fractional-indexing";
 import { ulid } from "src/ulid";
@@ -9,17 +9,13 @@ import { useRouter } from "next/router";
 import { NewDeck } from "src/components/NewDeck";
 
 const Home: NextPage = () => {
-  return (
-    <div className="text-center m-auto max-w-screen-md justify-items-center">
-      <DeckList />
-    </div>
-  );
+  return <DeckList />;
 };
 
 function DeckList() {
   let entities = useFact("aev", "deck").sort(sortByPosition("aev"));
   return (
-    <ul className="grid gap-4 justify-items-center">
+    <div className="grid gap-4">
       {entities.map((e) => {
         return <Deck key={e.id} entityID={e.entity} />;
       })}
@@ -29,14 +25,16 @@ function DeckList() {
           null
         )}
       />
-    </ul>
+    </div>
   );
 }
 
 const Deck = (props: { entityID: string }) => {
+  const [open, setOpen] = useState(false);
   let rep = useReplicache();
   let name = useFact("eav", `${props.entityID}-name`);
   let cards = useFact("eav", `${props.entityID}-contains`);
+
   let router = useRouter();
 
   const addCard = async () => {
@@ -57,19 +55,28 @@ const Deck = (props: { entityID: string }) => {
   if (!name[0]) return <div>no name</div>;
   return (
     <div>
-      <h3 className="text-xl">{name[0].value.value}</h3>
-      <div className="flex flex-row flex-wrap gap-4">
-        {cards.map((c) => {
-          return (
-            <Card
-              key={c.id}
-              href={`/c/${props.entityID}?position=${c.value.value}`}
-              entityID={c.value.value as string}
-            />
-          );
-        })}
-        <button onClick={() => addCard()}>add</button>
+      <div onClick={() => setOpen(!open)} className="cursor-pointer">
+        <h3 className="text-2xl">{name[0].value.value}</h3>
       </div>
+      {!open ? null : (
+        <div>
+          <div
+            style={{ width: "100vw" }}
+            className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll"
+          >
+            {cards.map((c) => {
+              return (
+                <Card
+                  key={c.id}
+                  href={`/c/${props.entityID}?position=${c.value.value}`}
+                  entityID={c.value.value as string}
+                />
+              );
+            })}
+          </div>
+          <button onClick={() => addCard()}>add</button>
+        </div>
+      )}
     </div>
   );
 };
