@@ -8,7 +8,14 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <ReplicacheProvider>
       <Socket />
-      <Component {...pageProps} />
+      <div
+        style={{
+          width: "100vw",
+          height: "calc(100vh - 32px)",
+        }}
+      >
+        <Component {...pageProps} />
+      </div>
       <Nav />
     </ReplicacheProvider>
   );
@@ -16,7 +23,15 @@ function MyApp({ Component, pageProps }: AppProps) {
 
 function Nav() {
   return (
-    <div style={{ bottom: '16px', width: "100%", maxWidth: '800px' }} className=" p-4 border-2 grid grid-flow-col gap-1 auto-cols-min justify-center absolute">
+    <div
+      style={{
+        bottom: "0px",
+        width: "100%",
+        maxWidth: "100vw",
+        height: "32px",
+      }}
+      className={`border-2 grid grid-flow-col gap-1 auto-cols-min justify-center fixed bg-gray-200`}
+    >
       <Link href="/">
         <a>home</a>
       </Link>
