@@ -85,14 +85,6 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
   data: (Fact & { meta: { schema: Schema } })[];
 };
 
-export const indexes = {
-  ea: (entity: string, attribute: string, factID: string) =>
-    `ea-${entity}-${attribute}-${factID}`,
-  av: (attribute: string, value: string) => `av-${attribute}-${value}`,
-  factID: (factID: string) => `factID-${factID}`,
-  ti: (time: string, factID: string) => `ti-${time}-${factID}`,
-};
-
 // Durable Object
 export class Counter implements DurableObject {
   version = 28;

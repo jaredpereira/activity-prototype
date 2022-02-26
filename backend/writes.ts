@@ -1,4 +1,4 @@
-import { Fact, FactInput, indexes } from "./";
+import { Fact, FactInput } from "./";
 import { ulid } from "../src/ulid";
 type Result =
   | { error: false; result: Fact }
@@ -8,6 +8,14 @@ export type Schema = {
   cardinality: "one" | "many";
   unique: boolean;
   type: Fact["value"]["type"];
+};
+
+const indexes = {
+  ea: (entity: string, attribute: string, factID: string) =>
+    `ea-${entity}-${attribute}-${factID}`,
+  av: (attribute: string, value: string) => `av-${attribute}-${value}`,
+  factID: (factID: string) => `factID-${factID}`,
+  ti: (time: string, factID: string) => `ti-${time}-${factID}`,
 };
 export async function serverGetSchema(
   tx: DurableObjectStorage,
