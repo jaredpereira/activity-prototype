@@ -60,6 +60,7 @@ const Deck = (props: { entityID: string; section?: string }) => {
         {Cards.map((c) => {
           return (
             <CardView
+              key={c.value.value as string}
               entityID={c.value.value as string}
               onSelect={(ref: HTMLDivElement) => {
                 ref.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });

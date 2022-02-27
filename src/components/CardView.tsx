@@ -51,7 +51,7 @@ export function CardView(props: {
     return () => {
       if (ref.current) observer.unobserve(ref.current);
     };
-  }, [ref]);
+  }, [ref, props.entityID]);
   return (
     <div
       id={props.entityID}

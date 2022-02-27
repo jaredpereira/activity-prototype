@@ -57,7 +57,7 @@ const Socket = () => {
     socket.current.addEventListener("message", () => {
       rep.pull();
     });
-  }, []);
+  }, [rep]);
   return null;
 };
 
