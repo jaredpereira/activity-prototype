@@ -10,7 +10,7 @@ export const NewDeck = (props: { position: string }) => {
     return (
       <button
         onClick={() => setState({ ...state, open: true })}
-        className="text-accent-blue  border-2 border-accent-blue grid justify-items-center rounded-md py-3"
+        className="text-accent-blue  border-2 border-accent-blue grid justify-items-center rounded-md py-3 w-full"
       >
         <div className="justify-self-center grid grid-flow-col gap-2 ">
           <NewDeckIcon height="22" /> <span>New Deck</span>

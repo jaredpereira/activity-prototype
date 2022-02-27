@@ -8,6 +8,7 @@ import { useFact, useReplicache } from "src/useReplicache";
 import { Card } from "src/components/Card";
 import { sortByPosition } from "src/utils";
 import Textarea from "./AutosizeTextarea";
+import { More } from "src/Icons";
 
 export const Section = (props: {
   entityID: string;
@@ -24,12 +25,22 @@ export const Section = (props: {
     []
   );
 
-  if (schema?.type === "reference")
-    return (
-      <MultipleCardSection entityID={props.entityID} section={props.section} />
-    );
-
-  return <SingleTextSection {...props} />;
+  return (
+    <div>
+      <div className="grid grid-flow-col items-center">
+        <h3 className="text-xl"> {props.section} </h3>
+        <More className="justify-self-end" />
+      </div>
+      {schema?.type === "reference" ? (
+        <MultipleCardSection
+          entityID={props.entityID}
+          section={props.section}
+        />
+      ) : (
+        <SingleTextSection {...props} />
+      )}
+    </div>
+  );
 };
 
 const SingleTextSection = (props: {
@@ -42,26 +53,23 @@ const SingleTextSection = (props: {
   let inputEl = useRef<HTMLTextAreaElement | null>(null);
 
   return (
-    <div>
-      <h3 className="text-xl"> {props.section} </h3>
-      <Textarea
-        autoFocus={props.new}
-        ref={inputEl}
-        className="w-full"
-        value={(fact?.value.value as string) || ""}
-        onChange={async (e) => {
-          let start = e.currentTarget.selectionStart,
-            end = e.currentTarget.selectionEnd;
-          await rep.mutate.assertFact({
-            entity: props.entityID,
-            attribute: props.section,
-            value: { type: "string", value: e.currentTarget.value },
-            positions: fact?.positions || {},
-          });
-          inputEl.current?.setSelectionRange(start, end);
-        }}
-      />
-    </div>
+    <Textarea
+      autoFocus={props.new}
+      ref={inputEl}
+      className="w-full"
+      value={(fact?.value.value as string) || ""}
+      onChange={async (e) => {
+        let start = e.currentTarget.selectionStart,
+          end = e.currentTarget.selectionEnd;
+        await rep.mutate.assertFact({
+          entity: props.entityID,
+          attribute: props.section,
+          value: { type: "string", value: e.currentTarget.value },
+          positions: fact?.positions || {},
+        });
+        inputEl.current?.setSelectionRange(start, end);
+      }}
+    />
   );
 };
 
@@ -85,18 +93,15 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
     router.push(`/c/${props.entityID}/${props.section}?position=${id}`);
   };
   return (
-    <div>
-      <h3 className="text-xl"> {props.section} </h3>
-      <div className="flex flex-row gap-2 flex-wrap">
-        {facts.map((m) => (
-          <Card
-            key={m.id}
-            href={`/c/${props.entityID}/${props.section}?position=${m.value.value}`}
-            entityID={m.value.value as string}
-          />
-        ))}
-        <AddCardButton onAdd={onAdd} />
-      </div>
+    <div className="flex flex-row gap-2 flex-wrap">
+      {facts.map((m) => (
+        <Card
+          key={m.id}
+          href={`/c/${props.entityID}/${props.section}?position=${m.value.value}`}
+          entityID={m.value.value as string}
+        />
+      ))}
+      <AddCardButton onAdd={onAdd} />
     </div>
   );
 };

@@ -117,3 +117,20 @@ export const Shuffle = (props: SVGProps<SVGSVGElement>) => {
     </svg>
   );
 };
+
+export const More = (props: SVGProps<SVGSVGElement>) => {
+  return (
+    <svg
+      {...props}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="17" r="1.5" fill="#272727" />
+      <circle cx="12" cy="12" r="1.5" fill="#272727" />
+      <circle cx="12" cy="7" r="1.5" fill="#272727" />
+    </svg>
+  );
+};
