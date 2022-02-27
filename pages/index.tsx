@@ -67,7 +67,7 @@ const Deck = (props: { entityID: string }) => {
             style={{
               width: `100vw`,
             }}
-            className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll no-scrollbar px-8"
+            className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll no-scrollbar px-8 py-1"
           >
             {cards.map((c) => {
               return (

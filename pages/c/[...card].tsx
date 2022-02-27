@@ -35,7 +35,12 @@ const Deck = (props: { entityID: string; section?: string }) => {
     if (index !== -1) setPosition(index);
   }, [Cards, queryPosition]);
 
-  if (!deck && !props.section) return <CardView entityID={props.entityID} />;
+  if (!deck && !props.section)
+    return (
+      <div className="h-full flex flex-col items-stretch relative p-2">
+        <CardView entityID={props.entityID} />
+      </div>
+    );
 
   return (
     <div className="h-full flex flex-col items-stretch relative pt-8">

@@ -57,11 +57,12 @@ export function CardView(props: {
       id={props.entityID}
       ref={ref}
       style={{
-        height: "100%",
+        height: "calc(100% - 8px)",
+        marginTop: "3px",
         width: "100%",
         overflowY: "scroll",
       }}
-      className="grid gap-4 p-3 snap-center no-scrollbar bg-white border-2 rounded-md"
+      className="grid auto-rows-max gap-4 p-3 snap-center no-scrollbar bg-white border-[1] border-grey-90 rounded-md shadow-drop"
     >
       <Title entityID={props.entityID} />
       <TextContent entityID={props.entityID} />
@@ -97,7 +98,7 @@ const Title = (props: { entityID: string }) => {
   return (
     <Textarea
       ref={inputEl}
-      className="text-2xl"
+      className="text-xl text-grey-15 font-bold"
       value={(title?.value.value as string) || ""}
       placeholder="Untitled"
       onChange={async (e) => {
@@ -123,7 +124,8 @@ const TextContent = (props: { entityID: string }) => {
   return (
     <Textarea
       ref={textarea}
-      className="text-xl border-2 p-2"
+      className="placeholder:italic"
+      placeholder="write something..."
       spellCheck={false}
       value={(content?.value.value as string) || ""}
       onChange={async (e) => {

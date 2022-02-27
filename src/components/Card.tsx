@@ -7,7 +7,7 @@ export function Card(props: { href: string; entityID: string }) {
   return (
     <Link href={props.href}>
       <a>
-        <div className="border-2 rounded-md p-2 w-36 h-24 overflow-scroll overflow-x-hidden grid gap-2">
+        <div className="border-[1] border-grey-80 shadow-drop rounded-md p-2 w-36 h-24 overflow-y-auto overflow-x-hidden grid gap-2">
           <h3 className={"text-sm uppercase font-bold"}>
             {title?.value.value}
           </h3>
