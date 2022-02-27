@@ -4,7 +4,28 @@ module.exports = {
     "./src/components/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    borderRadius: {
+      none: "0",
+      md: "0.25rem",
+      lg: "0.375rem",
+    },
+    colors: {
+      "grey-15": "#272727",
+      "grey-35": "#595959",
+      "grey-55": "#8C8C8C",
+      "grey-80": "#CCCCCC",
+      "grey-90": "#E6E6E6",
+      white: "#FFFFFF",
+      background: "seashell",
+      lightBG: "#FDFCFA",
+      "accent-blue": "#0000FF",
+      "accent-red": "#DC143C",
+    },
+    extend: {
+      boxShadow: {
+        inset: "0 35px 60px -15px rgba(0, 0, 0, 0.3)",
+      },
+    },
   },
   variants: {
     extend: {},

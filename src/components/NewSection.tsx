@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useFact } from "src/useReplicache";
 import { AddCardButton } from "src/components/Section";
 import { Combobox, RadioGroup } from "@headlessui/react";
+import Textarea from "./AutosizeTextarea";
 
 export const AddSection = (props: {
   createNewSection: (args: {
@@ -25,7 +26,7 @@ export const AddSection = (props: {
 
   return (
     <div>
-      <div className="grid grid-flow-col">
+      <div className="">
         <SectionNameSelector
           selectedName={state.name}
           sections={Object.keys(sections)}
@@ -91,6 +92,7 @@ const SectionNameSelector = (props: {
     <div>
       <Combobox value={props.selectedName} onChange={props.onChange}>
         <Combobox.Input
+          as={Textarea}
           className="text-xl"
           placeholder="New Section"
           onChange={(event) => setQuery(event.target.value)}

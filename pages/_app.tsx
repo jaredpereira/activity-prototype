@@ -11,12 +11,18 @@ function MyApp({ Component, pageProps }: AppProps) {
       <div
         style={{
           width: "100vw",
-          height: "calc(100vh - 32px)",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          paddingBottom: "32px",
+          alignItems: "stretch",
+          position: "relative",
         }}
+        className="bg-background"
       >
         <Component {...pageProps} />
+        <Nav />
       </div>
-      <Nav />
     </ReplicacheProvider>
   );
 }
@@ -25,12 +31,11 @@ function Nav() {
   return (
     <div
       style={{
-        bottom: "0px",
         width: "100%",
         maxWidth: "100vw",
         height: "32px",
       }}
-      className={`border-2 grid grid-flow-col gap-1 auto-cols-min justify-center fixed bg-gray-200`}
+      className={`border-2 grid grid-flow-col gap-1 auto-cols-min justify-center bg-grey-55`}
     >
       <Link href="/">
         <a>home</a>

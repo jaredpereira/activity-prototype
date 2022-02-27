@@ -7,6 +7,7 @@ import { generateKeyBetween } from "src/fractional-indexing";
 import { useFact, useReplicache } from "src/useReplicache";
 import { Card } from "src/components/Card";
 import { sortByPosition } from "src/utils";
+import Textarea from "./AutosizeTextarea";
 
 export const Section = (props: {
   entityID: string;
@@ -38,12 +39,12 @@ const SingleTextSection = (props: {
 }) => {
   let rep = useReplicache();
   let fact = useFact("eav", `${props.entityID}-${props.section}`)[0];
-  let inputEl = useRef<HTMLInputElement | null>(null);
+  let inputEl = useRef<HTMLTextAreaElement | null>(null);
 
   return (
     <div>
       <h3 className="text-xl"> {props.section} </h3>
-      <input
+      <Textarea
         autoFocus={props.new}
         ref={inputEl}
         className="w-full"
@@ -86,9 +87,13 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
   return (
     <div>
       <h3 className="text-xl"> {props.section} </h3>
-      <div className="flex flex-row gap-x-4 flex-wrap">
+      <div className="flex flex-row gap-2 flex-wrap">
         {facts.map((m) => (
-          <Card key={m.id} href={`/c/${props.entityID}/${props.section}?position=${m.value.value}`} entityID={m.value.value as string} />
+          <Card
+            key={m.id}
+            href={`/c/${props.entityID}/${props.section}?position=${m.value.value}`}
+            entityID={m.value.value as string}
+          />
         ))}
         <AddCardButton onAdd={onAdd} />
       </div>

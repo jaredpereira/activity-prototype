@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { generateKeyBetween } from "src/fractional-indexing";
 import { useReplicache, useFact } from "src/useReplicache";
 import { sortByPosition } from "src/utils";
+import Textarea from "./AutosizeTextarea";
 import { Card } from "./Card";
 import { AddSection } from "./NewSection";
 import { Section } from "./Section";
@@ -47,10 +48,10 @@ export function CardView(props: {
       ref={ref}
       style={{
         height: "100%",
-        width: "calc(100vw - 1rem)",
+        width: "100%",
         overflowY: "scroll",
       }}
-      className="grid gap-4 px-4 snap-center no-scrollbar"
+      className="grid gap-4 p-3 snap-center no-scrollbar bg-white border-2 rounded-md"
     >
       <Title entityID={props.entityID} />
       <TextContent entityID={props.entityID} />
@@ -81,10 +82,10 @@ const References = (props: { entityID: string }) => {
 
 const Title = (props: { entityID: string }) => {
   let title = useFact("eav", `${props.entityID}-name`)[0];
-  let inputEl = useRef<null | HTMLInputElement>(null);
+  let inputEl = useRef<null | HTMLTextAreaElement>(null);
   let rep = useReplicache();
   return (
-    <input
+    <Textarea
       ref={inputEl}
       className="text-2xl"
       value={(title?.value.value as string) || ""}
@@ -110,7 +111,7 @@ const TextContent = (props: { entityID: string }) => {
   let content = useFact("eav", `${props.entityID}-textContent`)[0];
 
   return (
-    <textarea
+    <Textarea
       ref={textarea}
       className="text-xl border-2 p-2"
       spellCheck={false}
@@ -138,7 +139,7 @@ const Sections = (props: { entityID: string }) => {
   );
 
   return (
-    <div className="grid gap-4">
+    <>
       {sections.map((section) => (
         <Section
           new={newSection === section.value.value}
@@ -162,6 +163,6 @@ const Sections = (props: { entityID: string }) => {
           });
         }}
       />
-    </div>
+    </>
   );
 };

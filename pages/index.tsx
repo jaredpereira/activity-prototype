@@ -1,68 +1,66 @@
 import type { NextPage } from "next";
-import { useFact, useReplicache } from "../src/useReplicache";
+import { useFact } from "../src/useReplicache";
 import { sortByPosition } from "../src/utils";
 import React, { useState } from "react";
 import { Card } from "../src/components/Card";
 import { generateKeyBetween } from "src/fractional-indexing";
-import { ulid } from "src/ulid";
-import { useRouter } from "next/router";
 import { NewDeck } from "src/components/NewDeck";
+import { AddCardButton } from "src/components/AddCard";
 
 const Home: NextPage = () => {
-  return <DeckList />;
+  return (
+    <div className="h-full w-full">
+      <DeckList />
+    </div>
+  );
 };
+
+export default Home;
 
 function DeckList() {
   let entities = useFact("aev", "deck").sort(sortByPosition("aev"));
   return (
-    <div className="grid gap-4">
-      {entities.map((e) => {
-        return <Deck key={e.id} entityID={e.entity} />;
-      })}
+    <div className="flex flex-col gap-4 p-5">
       <NewDeck
         position={generateKeyBetween(
           entities[entities.length - 1]?.positions.aev || null,
           null
         )}
       />
+      {entities.map((e) => {
+        return <Deck key={e.id} entityID={e.entity} />;
+      })}
     </div>
   );
 }
 
 const Deck = (props: { entityID: string }) => {
   const [open, setOpen] = useState(false);
-  let rep = useReplicache();
   let name = useFact("eav", `${props.entityID}-name`);
   let cards = useFact("eav", `${props.entityID}-contains`);
 
-  let router = useRouter();
-
-  const addCard = async () => {
-    let newCard = ulid();
-    await rep.mutate.addCardToSection({
-      newCard,
-      entity: props.entityID,
-      section: "contains",
-      position: generateKeyBetween(
-        cards[cards.length - 1]?.positions.eav || null,
-        null
-      ),
-    });
-    router.push(`/c/${newCard}`);
-    router.push(`/c/${props.entityID}?position=${newCard}`);
-  };
-
   if (!name[0]) return <div>no name</div>;
   return (
-    <div>
+    <div className="w-full">
       <div onClick={() => setOpen(!open)} className="cursor-pointer">
         <h3 className="text-2xl">{name[0].value.value}</h3>
       </div>
       {!open ? null : (
-        <div>
+        <div
+          style={{
+            width: `100vw`,
+            marginLeft: "-20px",
+          }}
+          className="bg-lightBG shadow-inner p-8 pb-4"
+        >
           <div
-            style={{ width: "100vw" }}
-            className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll"
+            style={{
+              width: `100vw`,
+              marginLeft: "-32px",
+              paddingLeft: "32px",
+              paddingRight: "32px",
+            }}
+            className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll "
           >
             {cards.map((c) => {
               return (
@@ -74,11 +72,17 @@ const Deck = (props: { entityID: string }) => {
               );
             })}
           </div>
-          <button onClick={() => addCard()}>add</button>
+          <div className="justify-items-end grid pt-2">
+            <AddCardButton
+              entityID={props.entityID}
+              position={generateKeyBetween(
+                cards[cards.length - 1]?.positions.eav || null,
+                null
+              )}
+            />
+          </div>
         </div>
       )}
     </div>
   );
 };
-
-export default Home;
