@@ -3,8 +3,9 @@ import React, { useEffect, useState } from "react";
 import { useFact } from "src/useReplicache";
 import { sortByPosition } from "src/utils";
 import { CardView } from "src/components/CardView";
-import { Arrow, Cross, NewCard } from "src/Icons";
+import { Arrow, Cross, Shuffle } from "src/Icons";
 import Link from "next/link";
+import { AddCardButton } from "src/components/AddCard";
 
 export default function DeckPage() {
   let router = useRouter();
@@ -64,21 +65,22 @@ const Deck = (props: { entityID: string; section?: string }) => {
           );
         })}
       </div>
-      <CardCounter
-        position={position}
-        length={Cards.length}
-        setPosition={(pos) => {
-          let route = new URL(window.location.href);
-          let card = Cards[pos];
-          smooth = true;
-          route.searchParams.set("position", card.value.value as string);
-          console.log(document.getElementById(card.value.value as string));
-          document
-            .getElementById(card.value.value as string)
-            ?.scrollIntoView({ behavior: "smooth" });
-          router.replace(route, undefined, { shallow: true });
-        }}
-      />
+      <div className="grid grid-flow-col gap-1 pb-3 pt-2 px-5">
+        <CardCounter
+          position={position}
+          length={Cards.length}
+          setPosition={(pos) => {
+            let route = new URL(window.location.href);
+            let card = Cards[pos];
+            smooth = true;
+            route.searchParams.set("position", card.value.value as string);
+            router.replace(route, undefined, { shallow: true });
+          }}
+        />
+        <div className="justify-items-end grid pt-2">
+          <AddCardButton entityID={props.entityID} position="" />
+        </div>
+      </div>
     </div>
   );
 };
@@ -89,29 +91,32 @@ const CardCounter = (props: {
   setPosition: (n: number) => void;
 }) => {
   return (
-    <div className="grid grid-flow-col gap-1 bg-background pb-3 w-full pt-2 px-5">
-      <div className="w-fit grid grid-flow-col gap-2">
-        <button
-          onClick={() => {
-            if (props.position > 0) props.setPosition(props.position - 1);
-          }}
-        >
-          <Arrow left className="text-accent-blue" />
-        </button>
-        <div className="text-grey-35 font-bold grid content-center">{`${props.position + 1
-          } / ${props.length}`}</div>
-        <button
-          onClick={() => {
-            if (props.position < props.length - 1)
-              props.setPosition(props.position + 1);
-          }}
-        >
-          <Arrow right className="text-accent-blue" />
-        </button>
-      </div>
-      <div className="justify-self-end text-accent-blue w-fit font-bold grid items-center grid-flow-col gap-1">
-        <NewCard className="inline" /> Add Card!
-      </div>
+    <div className="w-fit grid grid-flow-col gap-2">
+      <button
+        onClick={() => {
+          if (props.position > 0) props.setPosition(props.position - 1);
+        }}
+      >
+        <Arrow left className="text-accent-blue" />
+      </button>
+      <div className="text-grey-35 font-bold grid content-center">{`${props.position + 1
+        } / ${props.length}`}</div>
+      <button
+        onClick={() => {
+          if (props.position < props.length - 1)
+            props.setPosition(props.position + 1);
+        }}
+      >
+        <Arrow right className="text-accent-blue" />
+      </button>
+      <button
+        onClick={() => {
+          props.setPosition(Math.floor(Math.random() * props.length));
+        }}
+        className="text-accent-blue content-center grid w-min"
+      >
+        <Shuffle />
+      </button>
     </div>
   );
 };

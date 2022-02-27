@@ -25,12 +25,22 @@ export function CardView(props: {
     }
   }, [props.entityID, props.selectedCard]);
   useEffect(() => {
+    let timeout: number | undefined = undefined;
     let observer = new IntersectionObserver(
       (e) => {
+        if (!e[0]?.isIntersecting && timeout) {
+          clearTimeout(timeout);
+          timeout = undefined;
+        }
         if (e[0]?.isIntersecting) {
-          let route = new URL(window.location.href);
-          route.searchParams.set("position", props.entityID);
-          router.replace(route, undefined, { shallow: true });
+          timeout = window.setTimeout(() => {
+            let route = new URL(window.location.href);
+            if (route.searchParams.get("position") !== props.entityID) {
+              route.searchParams.set("position", props.entityID);
+              router.replace(route, undefined, { shallow: true });
+            }
+            timeout = undefined;
+          }, 750);
         }
       },
       { root: null, rootMargin: "0px", threshold: 1.0 }
