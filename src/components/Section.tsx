@@ -9,6 +9,7 @@ import { Card } from "src/components/Card";
 import { sortByPosition } from "src/utils";
 import Textarea from "./AutosizeTextarea";
 import { More } from "src/Icons";
+import { Menu } from "@headlessui/react";
 
 export const Section = (props: {
   entityID: string;
@@ -29,7 +30,7 @@ export const Section = (props: {
     <div>
       <div className="grid grid-flow-col items-center">
         <h3 className="text-xl"> {props.section} </h3>
-        <More className="justify-self-end" />
+        <Options />
       </div>
       {schema?.type === "reference" ? (
         <MultipleCardSection
@@ -40,6 +41,32 @@ export const Section = (props: {
         <SingleTextSection {...props} />
       )}
     </div>
+  );
+};
+
+const Options = () => {
+  return (
+    <Menu as="div" className="text-right">
+      <Menu.Button>
+        <More className="justify-self-end" />
+      </Menu.Button>
+      <Menu.Items className="absolute w-52 right-12 divide-y divide-grey-80 border-[1px] p-4 border-grey-80 bg-white rounded-md shadow-lg focus:outline-none z-10 text-right">
+        <Menu.Item>
+          {({ active }) => (
+            <div className={`p-3 text-grey-35 ${active && "bg-blue-500 p-3"}`}>
+              Remove from Deck
+            </div>
+          )}
+        </Menu.Item>
+        <Menu.Item>
+          {({ active }) => (
+            <div className={`p-3 text-accent-red ${active && "bg-blue-500"}`}>
+              Delete Forever
+            </div>
+          )}
+        </Menu.Item>
+      </Menu.Items>
+    </Menu>
   );
 };
 
