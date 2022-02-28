@@ -26,6 +26,7 @@ export function CardView(props: {
   }, [props.entityID, props.selectedCard]);
   useEffect(() => {
     let timeout: number | undefined = undefined;
+    let node = ref.current;
     let observer = new IntersectionObserver(
       (e) => {
         if (!e[0]?.isIntersecting && timeout) {
@@ -46,12 +47,12 @@ export function CardView(props: {
       { root: null, rootMargin: "0px", threshold: 1.0 }
     );
     setTimeout(() => {
-      if (ref.current) observer.observe(ref.current);
+      if (node) observer.observe(node);
     }, 500);
     return () => {
-      if (ref.current) observer.unobserve(ref.current);
+      if (node) observer.unobserve(node);
     };
-  }, [ref, props.entityID]);
+  }, [ref, props.entityID, router]);
   return (
     <div
       id={props.entityID}

@@ -14,12 +14,39 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+// https://URL/v1/${entityID}/operation
 async function handleRequest(request: Request, env: Bindings) {
-  let id = env.COUNTER.idFromName("A");
-  let obj = env.COUNTER.get(id);
+  let url = new URL(request.url);
+  let path = url.pathname.split("/");
+
   if (request.method === "OPTIONS") return handleOptions(request);
-  let resp = await obj.fetch(request);
-  return resp;
+  switch (path[2]) {
+    case "create": {
+      let newActivity = env.COUNTER.newUniqueId();
+      console.log(newActivity);
+
+      return new Response(JSON.stringify({}), {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+          "Content-Type": "application/json;charset=UTF-8",
+        },
+      });
+    }
+    case "activity": {
+      let id = env.COUNTER.idFromString(path[3]);
+      let newUrl = new URL(request.url);
+      newUrl.pathname = "/" + path.slice(4).join("/");
+
+      let obj = env.COUNTER.get(id);
+      return obj.fetch(new Request(newUrl.toString(), new Request(request)));
+    }
+    default: {
+      return new Response("Not found", {
+        status: 404,
+      });
+    }
+  }
 }
 
 function handleOptions(request: Request) {
@@ -70,13 +97,13 @@ export type Value =
   | { type: "reference"; value: string }
   | { type: "union"; value: string }
   | {
-    type: "string";
-    value: string;
-  }
+      type: "string";
+      value: string;
+    }
   | {
-    type: "boolean";
-    value: boolean;
-  };
+      type: "boolean";
+      value: boolean;
+    };
 
 export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
@@ -87,7 +114,7 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 28;
+  version = 29;
 
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
@@ -148,8 +175,8 @@ export class Counter implements DurableObject {
               f.attribute === "cardinality"
                 ? { type: "union", value: f.value as string }
                 : typeof f.value === `string`
-                  ? { type: "string", value: f.value }
-                  : { type: "boolean", value: f.value };
+                ? { type: "string", value: f.value }
+                : { type: "boolean", value: f.value };
             let newData: Fact = {
               ...f,
               value,
@@ -158,11 +185,12 @@ export class Counter implements DurableObject {
               lastUpdated,
             };
             await writeFactToStorage(this.state.storage, newData, {
-              type: (initialFacts.find(
-                (f) =>
-                  f.entity === e[newData.attribute as keyof typeof e] &&
-                  f.attribute === "type"
-              )?.value as Schema["type"]) || "string",
+              type:
+                (initialFacts.find(
+                  (f) =>
+                    f.entity === e[newData.attribute as keyof typeof e] &&
+                    f.attribute === "type"
+                )?.value as Schema["type"]) || "string",
               cardinality:
                 (initialFacts.find(
                   (f) =>
@@ -265,7 +293,7 @@ export class Counter implements DurableObject {
           "Access-Control-Allow-Origin": "*",
           "Content-Type": "application/json;charset=UTF-8",
         },
-      })
+      });
     }
     return new Response(JSON.stringify({ msg: "shouldn't reach here" }), {
       headers: {

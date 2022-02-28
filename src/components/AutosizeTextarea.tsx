@@ -29,7 +29,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, Props>((props: Props, ref) => {
     if (textarea.current === document.activeElement) return;
     textarea.current.focus();
     textarea.current.setSelectionRange(initialCursor, initialCursor);
-  }, [initialCursor, focused, textarea.current]);
+  }, [initialCursor, focused, textarea]);
 
   let passDownProps = { ...props };
   delete passDownProps.focused;
