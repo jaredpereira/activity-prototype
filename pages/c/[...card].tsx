@@ -35,58 +35,62 @@ const Deck = (props: { entityID: string; section?: string }) => {
     if (index !== -1) setPosition(index);
   }, [Cards, queryPosition]);
 
-  if (!deck && !props.section)
-    return (
-      <div className="h-full flex flex-col items-stretch relative p-2">
-        <CardView entityID={props.entityID} />
-      </div>
-    );
-
   return (
     <div className="h-full flex flex-col items-stretch relative pt-8">
       <div className="px-4 grid grid-flow-col items-center w-full pr-10 pb-2">
-        <h4 className="uppercase text-accent-blue font-bold">{`${Name?.value.value
-          }${props.section ? `/${props.section}` : ""}`}</h4>
+        <h4 className="uppercase text-accent-blue font-bold">{`${
+          Name?.value.value
+        }${props.section ? `/${props.section}` : ""}`}</h4>
         <Link href="/">
           <a className="text-grey-15 justify-self-end">
             <Cross />
           </a>
         </Link>
       </div>
-      <div
-        style={{ gridAutoColumns: "calc(100vw - 3rem)" }}
-        className={`overflow-x-scroll grid grid-flow-col snap-x snap-mandatory h-full gap-4 px-4 no-scrollbar`}
-      >
-        {Cards.map((c) => {
-          return (
-            <CardView
-              key={c.value.value as string}
-              entityID={c.value.value as string}
-              onSelect={(ref: HTMLDivElement) => {
-                ref.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-                smooth = false;
-              }}
-              selectedCard={queryPosition}
-            />
-          );
-        })}
-      </div>
-      <div className="grid grid-flow-col gap-1 pb-3 pt-2 px-5">
-        <CardCounter
-          position={position}
-          length={Cards.length}
-          setPosition={(pos) => {
-            let route = new URL(window.location.href);
-            let card = Cards[pos];
-            smooth = true;
-            route.searchParams.set("position", card.value.value as string);
-            router.replace(route, undefined, { shallow: true });
-          }}
-        />
-        <div className="justify-items-end grid pt-2">
-          <AddCardButton entityID={props.entityID} position="" />
+      {!deck && !props.section ? (
+        <div className="h-full flex flex-col items-stretch relative p-2">
+          <CardView entityID={props.entityID} />
         </div>
-      </div>
+      ) : (
+        <>
+          <div
+            style={{ gridAutoColumns: "calc(100vw - 3rem)" }}
+            className={`overflow-x-scroll grid grid-flow-col snap-x snap-mandatory h-full gap-4 px-4 no-scrollbar`}
+          >
+            {Cards.map((c) => {
+              return (
+                <CardView
+                  key={c.value.value as string}
+                  entityID={c.value.value as string}
+                  onSelect={(ref: HTMLDivElement) => {
+                    ref.scrollIntoView({
+                      behavior: smooth ? "smooth" : "auto",
+                    });
+                    smooth = false;
+                  }}
+                  selectedCard={queryPosition}
+                />
+              );
+            })}
+          </div>
+          <div className="grid grid-flow-col gap-1 pb-3 pt-2 px-5">
+            <CardCounter
+              position={position}
+              length={Cards.length}
+              setPosition={(pos) => {
+                let route = new URL(window.location.href);
+                let card = Cards[pos];
+                smooth = true;
+                route.searchParams.set("position", card.value.value as string);
+                router.replace(route, undefined, { shallow: true });
+              }}
+            />
+            <div className="justify-items-end grid pt-2">
+              <AddCardButton entityID={props.entityID} position="" />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -105,8 +109,9 @@ const CardCounter = (props: {
       >
         <Arrow left className="text-accent-blue" />
       </button>
-      <div className="text-grey-35 font-bold grid content-center">{`${props.position + 1
-        } / ${props.length}`}</div>
+      <div className="text-grey-35 font-bold grid content-center">{`${
+        props.position + 1
+      } / ${props.length}`}</div>
       <button
         onClick={() => {
           if (props.position < props.length - 1)
