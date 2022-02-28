@@ -86,7 +86,7 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
       entity: props.entityID,
       section: props.section,
       position: generateKeyBetween(
-        facts[facts.length - 1].positions.eav || null,
+        facts[facts.length - 1]?.positions.eav || null,
         null
       ),
     });
