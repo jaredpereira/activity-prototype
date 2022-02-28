@@ -3,15 +3,29 @@ import { Mutations } from "./mutations";
 import { ulid } from "../src/ulid";
 import { Schema, writeFactToStorage } from "./writes";
 import { init } from "./populate";
+import {
+  handleLoginRequest,
+  handleSessionRequest,
+  handleLogoutRequest,
+} from "./auth";
 
 export default {
   fetch: handleRequest,
 };
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-  "Access-Control-Max-Age": "86400",
+const corsHeaders = {};
+
+const setDefaultHeaders = (request: Request, response: Response) => {
+  response.headers.append(
+    "Access-Control-Allow-Origin",
+    request.headers.get("origin") || "*"
+  );
+  response.headers.append(
+    "Access-Control-Allow-Methods",
+    "GET,HEAD,POST,OPTIONS"
+  );
+  response.headers.append("Content-Type", "application/json;charset=UTF-8");
+  response.headers.append("Access-Control-Allow-Credentials", "true");
 };
 
 // https://URL/v1/${entityID}/operation
@@ -20,33 +34,55 @@ async function handleRequest(request: Request, env: Bindings) {
   let path = url.pathname.split("/");
 
   if (request.method === "OPTIONS") return handleOptions(request);
+  let res: Response;
   switch (path[2]) {
-    case "create": {
-      let newActivity = env.COUNTER.newUniqueId();
-      console.log(newActivity);
-
-      return new Response(JSON.stringify({}), {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-          "Content-Type": "application/json;charset=UTF-8",
-        },
-      });
+    case "auth": {
+      switch (path[3]) {
+        case "login": {
+          let newUrl = new URL(request.url);
+          newUrl.pathname = "/" + path.slice(3).join("/");
+          res = await handleLoginRequest(
+            new Request(newUrl.toString(), new Request(request)),
+            env
+          );
+          break;
+        }
+        case "logout": {
+          res = await handleLogoutRequest(request, env);
+          break;
+        }
+        case "session": {
+          res = await handleSessionRequest(request, env);
+          break;
+        }
+        default: {
+          res = new Response("Not found", {
+            status: 404,
+          });
+        }
+      }
+      break;
     }
     case "activity": {
-      let id = env.COUNTER.idFromString(path[3]);
+      let id = env.COUNTER.idFromName(path[3]);
       let newUrl = new URL(request.url);
       newUrl.pathname = "/" + path.slice(4).join("/");
 
       let obj = env.COUNTER.get(id);
-      return obj.fetch(new Request(newUrl.toString(), new Request(request)));
+      res = await obj.fetch(
+        new Request(newUrl.toString(), new Request(request))
+      );
+      break;
     }
     default: {
-      return new Response("Not found", {
+      res = new Response("Not found", {
         status: 404,
       });
     }
   }
+
+  setDefaultHeaders(request, res);
+  return res;
 }
 
 function handleOptions(request: Request) {
@@ -59,7 +95,10 @@ function handleOptions(request: Request) {
     headers.get("Access-Control-Request-Headers") !== null
   ) {
     let respHeaders = {
-      ...corsHeaders,
+      "Access-Control-Allow-Origin": request.headers.get("origin") || "",
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
+      "Access-Control-Max-Age": "86400",
       "Access-Control-Allow-Headers":
         request.headers.get("Access-Control-Request-Headers") || "",
     };
@@ -80,6 +119,7 @@ function handleOptions(request: Request) {
 
 type Cookie = {
   lastUpdated: string;
+  version?: number;
 };
 
 export type Fact = {
@@ -110,11 +150,12 @@ export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
   cookie?: Cookie;
   data: (Fact & { meta: { schema: Schema } })[];
+  clear?: boolean;
 };
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 29;
+  version = 30;
 
   constructor(private readonly state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
@@ -221,13 +262,7 @@ export class Counter implements DurableObject {
       case "/dump": {
         return new Response(
           JSON.stringify([...(await this.state.storage.list())]),
-          {
-            headers: {
-              "Access-Control-Allow-Origin": "*",
-              "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-              "Content-Type": "application/json;charset=UTF-8",
-            },
-          }
+          {}
         );
       }
       case "/pull":
@@ -240,11 +275,7 @@ export class Counter implements DurableObject {
       default:
         return new Response("Not found", {
           status: 404,
-          headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET,HEAD,POST,OPTIONS",
-            "Content-Type": "application/json;charset=UTF-8",
-          },
+          headers: {},
         });
     }
   }
@@ -258,48 +289,44 @@ export class Counter implements DurableObject {
           `lastMutationID-${data.clientID}`
         )) || 0;
 
+      let lastUpdated = cookie?.lastUpdated || "";
+      let version = cookie?.version || 0;
+      if (version < this.version) lastUpdated = "";
       let map = await this.state.storage.list<
         Fact & { meta: { schema: Schema } }
       >({
         prefix: `ti`,
-        start: `ti-${cookie?.lastUpdated || ""}`,
+        start: `ti-${lastUpdated}`,
       });
       let updates = [...map.values()].filter(
-        (f) => !cookie?.lastUpdated || f.lastUpdated > cookie.lastUpdated
+        (f) => !lastUpdated || f.lastUpdated > lastUpdated
       );
 
       let lastKey = updates[updates.length - 1];
-      let newCookie: Cookie | undefined = !lastKey
-        ? cookie?.lastUpdated
-          ? { lastUpdated: cookie.lastUpdated }
-          : undefined
-        : { lastUpdated: lastKey.lastUpdated };
+      let newCookie: Cookie = {
+        version: this.version,
+        lastUpdated:
+          lastUpdated || lastKey.lastUpdated || Date.now().toString(),
+      };
+
       let response: MyPullResponse = {
         cookie: newCookie,
+        clear: version < this.version,
         lastMutationID,
         data: updates,
       };
       return new Response(JSON.stringify(response), {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json;charset=UTF-8",
-        },
+        headers: {},
       });
     } catch (e) {
       console.log(e);
       new Response(JSON.stringify(e), {
         status: 400,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json;charset=UTF-8",
-        },
+        headers: {},
       });
     }
     return new Response(JSON.stringify({ msg: "shouldn't reach here" }), {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json;charset=UTF-8",
-      },
+      headers: {},
     });
   }
 
@@ -336,12 +363,9 @@ export class Counter implements DurableObject {
     }
 
     this.sendPoke();
-    return new Response(null, {
+    return new Response(JSON.stringify({}), {
       status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json;charset=UTF-8",
-      },
+      headers: {},
     });
   }
 

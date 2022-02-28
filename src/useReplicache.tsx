@@ -21,10 +21,7 @@ let ReplicacheContext = createContext<Replicache<ReplicacheMutators> | null>(
   null
 );
 
-const workerURLS = {
-  production: "https://activity-prototype.awarm.workers.dev",
-  local: "http://192.168.1.45:8787",
-};
+const NEXT_PUBLIC_WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
 export const ReplicacheProvider: React.FC = (props) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
   useEffect(() => {
@@ -32,8 +29,8 @@ export const ReplicacheProvider: React.FC = (props) => {
       name: "test-db2",
       schemaVersion: `27`,
       pushDelay: 500,
-      pullURL: `${workerURLS.production}/pull`,
-      pushURL: `${workerURLS.production}/push`,
+      pullURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/A/pull`,
+      pushURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/A/push`,
       puller: async (req) => {
         let res = await fetch(req);
         let data: MyPullResponse = await res.json();
@@ -54,7 +51,7 @@ export const ReplicacheProvider: React.FC = (props) => {
           response: {
             lastMutationID: data.lastMutationID,
             cookie: data.cookie,
-            patch: ops,
+            patch: data.clear ? [{ op: "clear" }, ...ops] : ops,
           },
         };
       },
@@ -87,8 +84,8 @@ export const useFact = (index: string, prefix: string) => {
   return useSubscribe(
     rep,
     async (tx) => {
-      if (!prefix) return [] as Fact[]
-      return tx.scan({ indexName: index, prefix }).values().toArray()
+      if (!prefix) return [] as Fact[];
+      return tx.scan({ indexName: index, prefix }).values().toArray();
     },
     [],
     [index, prefix]
