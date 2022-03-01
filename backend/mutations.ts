@@ -1,6 +1,6 @@
 import { ReadTransaction, WriteTransaction } from "replicache";
 import { generateKeyBetween } from "src/fractional-indexing";
-import { FactInput, Fact } from ".";
+import { FactInput, Fact } from "backend/ActivityDurableObject";
 import { ulid } from "../src/ulid";
 import {
   Schema,
@@ -237,8 +237,8 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-                eav: generateKeyBetween(null, null),
-              }
+              eav: generateKeyBetween(null, null),
+            }
             : {},
       });
     },
@@ -293,8 +293,8 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-                eav: generateKeyBetween(null, null),
-              }
+              eav: generateKeyBetween(null, null),
+            }
             : {},
       });
     },

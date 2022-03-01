@@ -1,4 +1,4 @@
-import { Fact, FactInput } from "./";
+import { Fact, FactInput } from "./ActivityDurableObject";
 import { ulid } from "../src/ulid";
 type Result =
   | { error: false; result: Fact }

@@ -16,13 +16,12 @@ kv_namespaces = [
 
 [durable_objects]
 bindings = [
-  { name = "COUNTER", class_name = "Counter" }
+  { name = "ACTIVITY", class_name = "ActivityDurableObject" }
 ]
-
 
 [[migrations]]
 tag = "v1"
-new_classes = ["Counter"]
+new_classes = ["ActivityDurableObject"]
 
 [build]
 command = "npm run build-backend"

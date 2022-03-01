@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
-import { Fact, MyPullResponse } from "../backend";
+import { Fact, MyPullResponse } from "../backend/ActivityDurableObject";
 import { Mutations, processFact } from "../backend/mutations";
 
 type ReplicacheMutators = {
@@ -27,7 +27,6 @@ export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
 ) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
   useEffect(() => {
-    console.log({ activity: props.activity, msg: "init replicache" });
     if (!props.activity) return;
     const rep = new Replicache({
       name: `activity-${props.activity}`,

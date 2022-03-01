@@ -57,25 +57,20 @@ export async function handleLoginRequest(request: Request, env: Bindings) {
     return new Response(JSON.stringify({ errors: ["Incorrect password"] }), {
       status: 401,
     });
-  console.log(env);
   let studio = await env.usernames_to_studios.get(body.username);
   if (!studio) {
-    let newID = env.COUNTER.newUniqueId();
-    console.log("creating new DO");
+    let newID = env.ACTIVITY.newUniqueId();
     studio = newID.toString();
     env.usernames_to_studios.put(body.username, studio);
   }
-  console.log(studio);
   token = { username: body.username, id: body.username, studio };
   let res = new Response(JSON.stringify(token), {});
   setToken(res, token);
-  console.log(res.headers.get("Set-Cookie"));
   return res;
 }
 
 export async function handleLogoutRequest(_request: Request, _env: Bindings) {
   let res = new Response(JSON.stringify({}));
-  console.log("loggin out!");
   removeToken(res);
   return res;
 }

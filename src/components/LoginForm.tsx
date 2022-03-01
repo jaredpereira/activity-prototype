@@ -5,7 +5,6 @@ export function LoginForm() {
   let [login, setLogin] = useState({ username: "", password: "" });
   let [incorrect, setIncorrect] = useState(false);
   let { data: auth, mutate } = useAuthentication();
-  console.log(auth);
 
   return (
     <div>

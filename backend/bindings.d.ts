@@ -1,4 +1,4 @@
 interface Bindings {
-  COUNTER: DurableObjectNamespace;
+  ACTIVITY: DurableObjectNamespace;
   usernames_to_studios: KVNamespace;
 }
