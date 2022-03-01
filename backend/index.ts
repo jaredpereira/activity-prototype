@@ -39,12 +39,7 @@ async function handleRequest(request: Request, env: Bindings) {
     case "auth": {
       switch (path[3]) {
         case "login": {
-          let newUrl = new URL(request.url);
-          newUrl.pathname = "/" + path.slice(3).join("/");
-          res = await handleLoginRequest(
-            new Request(newUrl.toString(), new Request(request)),
-            env
-          );
+          res = await handleLoginRequest(request, env);
           break;
         }
         case "logout": {
@@ -63,15 +58,43 @@ async function handleRequest(request: Request, env: Bindings) {
       }
       break;
     }
+    case "studio": {
+      // fetch just the studio name
+      let studio = await env.usernames_to_studios.get(path[3]);
+      if (!studio) {
+        res = new Response(JSON.stringify({}), { status: 404 });
+        break;
+      }
+      if (!path[4]) {
+        res = new Response(JSON.stringify({ id: studio }), { status: 200 });
+      } else {
+        let obj = env.COUNTER.get(env.COUNTER.idFromString(studio));
+        let result = await obj.fetch(
+          new Request("http://internal/activity/" + path[4])
+        );
+        if (result.status !== 200)
+          res = new Response(JSON.stringify({}), { status: 404 });
+        else res = new Response(JSON.stringify({ id: await result.text() }));
+      }
+      break;
+    }
     case "activity": {
-      let id = env.COUNTER.idFromName(path[3]);
-      let newUrl = new URL(request.url);
-      newUrl.pathname = "/" + path.slice(4).join("/");
+      try {
+        let id = env.COUNTER.idFromString(path[3]);
+        let newUrl = new URL(request.url);
+        newUrl.pathname = "/" + path.slice(4).join("/");
 
-      let obj = env.COUNTER.get(id);
-      res = await obj.fetch(
-        new Request(newUrl.toString(), new Request(request))
-      );
+        let obj = env.COUNTER.get(id);
+        let activityRes = await obj.fetch(
+          new Request(newUrl.toString(), new Request(request))
+        );
+        res = new Response(activityRes.body, activityRes);
+      } catch (e) {
+        res = new Response(
+          JSON.stringify({ errors: [`No activity with id: ${path[3]} found`] }),
+          { status: 404 }
+        );
+      }
       break;
     }
     default: {
@@ -155,9 +178,12 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 
 // Durable Object
 export class Counter implements DurableObject {
-  version = 30;
+  version = 31;
 
-  constructor(private readonly state: DurableObjectState) {
+  constructor(
+    private readonly state: DurableObjectState,
+    private readonly env: Bindings
+  ) {
     this.state.blockConcurrencyWhile(async () => {
       let lastVersion =
         (await this.state.storage.get<number>("meta-lastVersion")) || 0;
@@ -258,18 +284,92 @@ export class Counter implements DurableObject {
   async fetch(request: Request) {
     // Apply requested action.
     let url = new URL(request.url);
-    switch (url.pathname) {
-      case "/dump": {
+    let path = url.pathname.split("/");
+    switch (path[1]) {
+      case "dump": {
         return new Response(
           JSON.stringify([...(await this.state.storage.list())]),
           {}
         );
       }
-      case "/pull":
+      case "activity": {
+        switch (request.method) {
+          case "GET": {
+            let entity = await this.state.storage.get<Fact>(
+              `av-name-${path[2]}`
+            );
+            if (!entity)
+              return new Response(JSON.stringify({}), { status: 404 });
+            let activity = [
+              ...(
+                await this.state.storage.list<Fact>({
+                  prefix: `ea-${entity.entity}-activity`,
+                })
+              ).values(),
+            ];
+            if (!activity[0])
+              return new Response(JSON.stringify({}), { status: 404 });
+            return new Response(activity[0].value.value as string, {
+              status: 200,
+            });
+          }
+          case "POST": {
+            console.log("creating new activity");
+            let body: { name: string } = await request.json();
+            console.log(body);
+            let existingActivity = await this.state.storage.get<Fact>(
+              `av-name-${body.name}`
+            );
+            if (existingActivity) {
+              console.log("existing activity", existingActivity);
+              return new Response(
+                JSON.stringify({ errors: ["Activity already exists"] }),
+                { status: 401 }
+              );
+            }
+            let newEntity = ulid();
+            let newActivity = this.env.COUNTER.newUniqueId().toString();
+            console.log(
+              await Promise.all([
+                writeFactToStorage(
+                  this.state.storage,
+                  {
+                    id: ulid(),
+                    entity: newEntity,
+                    attribute: "name",
+                    lastUpdated: Date.now().toString(),
+                    value: { type: "string", value: body.name },
+                    positions: {},
+                  },
+                  { unique: true, cardinality: "one", type: "string" }
+                ),
+                writeFactToStorage(
+                  this.state.storage,
+                  {
+                    id: ulid(),
+                    entity: newEntity,
+                    attribute: "activity",
+                    lastUpdated: Date.now().toString(),
+                    value: { type: "string", value: newActivity },
+                    positions: {},
+                  },
+                  { unique: true, cardinality: "one", type: "string" }
+                ),
+              ])
+            );
+            return new Response(JSON.stringify({}), { status: 200 });
+          }
+        }
+        return new Response(
+          JSON.stringify({ errors: ["Only POST and GET supported"] }),
+          { status: 401 }
+        );
+      }
+      case "pull":
         return this.pull(request);
-      case "/push":
+      case "push":
         return this.push(request);
-      case "/poke":
+      case "poke":
         console.log("poke websocket connecting");
         return this.pokeEndpoint(request);
       default:
@@ -389,7 +489,6 @@ export class Counter implements DurableObject {
     //@ts-ignore
     server.accept();
     server.addEventListener("close", () => {
-      server.close();
       this.sockets = this.sockets.filter((s) => s.id !== id);
     });
 

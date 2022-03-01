@@ -22,15 +22,19 @@ let ReplicacheContext = createContext<Replicache<ReplicacheMutators> | null>(
 );
 
 const NEXT_PUBLIC_WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
-export const ReplicacheProvider: React.FC = (props) => {
+export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
+  props
+) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
   useEffect(() => {
+    console.log({ activity: props.activity, msg: "init replicache" });
+    if (!props.activity) return;
     const rep = new Replicache({
-      name: "test-db2",
+      name: `activity-${props.activity}`,
       schemaVersion: `27`,
       pushDelay: 500,
-      pullURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/A/pull`,
-      pushURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/A/push`,
+      pullURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}/pull`,
+      pushURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}/push`,
       puller: async (req) => {
         let res = await fetch(req);
         let data: MyPullResponse = await res.json();
@@ -63,7 +67,11 @@ export const ReplicacheProvider: React.FC = (props) => {
     rep.createIndex({ name: "ave", jsonPointer: "/indexes/ave" });
     rep.createIndex({ name: "vae", jsonPointer: "/indexes/vae" });
     setRep(rep);
-  }, []);
+    return () => {
+      rep.close();
+      setRep(null);
+    };
+  }, [props.activity]);
 
   return (
     <ReplicacheContext.Provider value={rep}>

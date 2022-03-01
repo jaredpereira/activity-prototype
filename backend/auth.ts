@@ -4,6 +4,7 @@ import useSWR from "swr";
 export type Token = {
   username: string;
   id: string;
+  studio: string;
 };
 
 export type LoginRequestBody = {
@@ -18,6 +19,9 @@ export function removeToken(res: Response) {
     "Set-Cookie",
     cookie.serialize(cookieKey, "", {
       path: "/",
+      sameSite: "none",
+      httpOnly: true,
+      secure: true,
       expires: new Date(Date.now() - 1000),
     })
   );
@@ -30,7 +34,7 @@ function setToken(res: Response, token: Token) {
       path: "/",
       expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: "none",
       secure: true,
     })
   );
@@ -45,7 +49,7 @@ export function getToken(req: Request) {
   return;
 }
 
-export async function handleLoginRequest(request: Request, _env: Bindings) {
+export async function handleLoginRequest(request: Request, env: Bindings) {
   let body = (await request.json()) as LoginRequestBody;
   let token = getToken(request);
   if (token) return new Response(JSON.stringify({}), { status: 200 });
@@ -53,7 +57,16 @@ export async function handleLoginRequest(request: Request, _env: Bindings) {
     return new Response(JSON.stringify({ errors: ["Incorrect password"] }), {
       status: 401,
     });
-  token = { username: body.username, id: body.username };
+  console.log(env);
+  let studio = await env.usernames_to_studios.get(body.username);
+  if (!studio) {
+    let newID = env.COUNTER.newUniqueId();
+    console.log("creating new DO");
+    studio = newID.toString();
+    env.usernames_to_studios.put(body.username, studio);
+  }
+  console.log(studio);
+  token = { username: body.username, id: body.username, studio };
   let res = new Response(JSON.stringify(token), {});
   setToken(res, token);
   console.log(res.headers.get("Set-Cookie"));
@@ -83,12 +96,11 @@ export async function handleSessionRequest(request: Request, _env: Bindings) {
 }
 
 export const useAuthentication = () => {
-  return useSWR<Session>(
-    "http://localhost:8787/v0/auth/session",
-    async (key) => {
-      let res = await fetch(key, { credentials: "include" });
-      let result = await res.json();
-      return result as Session;
-    }
-  );
+  return useSWR<Session>("/v0/auth/session", async (key) => {
+    let res = await fetch(process.env.NEXT_PUBLIC_WORKER_URL + key, {
+      credentials: "include",
+    });
+    let result = await res.json();
+    return result as Session;
+  });
 };
