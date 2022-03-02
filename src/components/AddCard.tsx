@@ -18,7 +18,9 @@ export const AddCardButton = (props: {
       section: "contains",
       position: props.position,
     });
-    router.push(`/c/${props.entityID}?position=${newCard}`);
+    router.push(
+      `/s/${router.query.studio}/a/${router.query.activity}/c/${props.entityID}?position=${newCard}`
+    );
   };
   return (
     <button

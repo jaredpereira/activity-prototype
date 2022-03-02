@@ -10,6 +10,7 @@ import { generateKeyBetween } from "src/fractional-indexing";
 import { Card } from "src/components/Card";
 import { NewDeck } from "src/components/NewDeck";
 import { AddCardButton } from "src/components/AddCard";
+import { useRouter } from "next/router";
 
 const Home: NextPage = () => {
   return (
@@ -44,6 +45,7 @@ const Deck = (props: { entityID: string }) => {
   const [open, setOpen] = useState(false);
   let name = useFact("eav", `${props.entityID}-name`);
   let cards = useFact("eav", `${props.entityID}-contains`);
+  let router = useRouter();
 
   if (!name[0]) return <div>no name</div>;
   return (
@@ -76,7 +78,7 @@ const Deck = (props: { entityID: string }) => {
               return (
                 <Card
                   key={c.id}
-                  href={`/c/${props.entityID}?position=${c.value.value}`}
+                  href={`/s/${router.query.studio}/a/${router.query.activity}/c/${props.entityID}?position=${c.value.value}`}
                   entityID={c.value.value as string}
                 />
               );

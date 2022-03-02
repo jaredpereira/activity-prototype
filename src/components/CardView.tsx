@@ -74,6 +74,7 @@ export function CardView(props: {
 }
 
 const References = (props: { entityID: string }) => {
+  let router = useRouter();
   const references = useFact("vae", props.entityID).filter(
     (f) => f.attribute !== "contains"
   );
@@ -85,7 +86,10 @@ const References = (props: { entityID: string }) => {
       {references.map((f) => (
         <div key={f.id}>
           <h3>{f.attribute}</h3>
-          <Card href={`/c/${f.entity}`} entityID={f.entity} />
+          <Card
+            href={`/s/${router.query.studio}/a/${router.query.activity}/c/${f.entity}`}
+            entityID={f.entity}
+          />
         </div>
       ))}
     </div>

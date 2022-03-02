@@ -1,8 +1,8 @@
 import "../styles/globals.css";
 import type { AppProps } from "next/app";
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import Link from "next/link";
-import { ReplicacheProvider, useReplicache } from "../src/useReplicache";
+import { ReplicacheProvider } from "../src/useReplicache";
 import { useAuthentication } from "backend/auth";
 import { LoginForm } from "src/components/LoginForm";
 import { useRouter } from "next/router";
@@ -21,7 +21,7 @@ function MyApp({ Component, pageProps }: AppProps) {
         </Layout>
       </StudioProvider>
     );
-  if (router.pathname === "/s/[studio]/a/[activity]")
+  if (router.pathname.startsWith("/s/[studio]/a/[activity]"))
     return (
       <ActivityProvider>
         <Layout>
@@ -52,21 +52,24 @@ function MyApp({ Component, pageProps }: AppProps) {
 const ActivityProvider: React.FC = (props) => {
   let router = useRouter();
   let studio = router.query.studio as string;
+  let activity = router.query.activity as string;
   let { data } = useSWR(
-    `/v0/studio/${studio}/${router.query.activity}`,
+    !studio || !activity
+      ? null
+      : `/v0/studio/${studio}/${router.query.activity}`,
     async (k) => {
       let res = await fetch(process.env.NEXT_PUBLIC_WORKER_URL + k);
+      console.log(res.status);
+      if (res.status !== 200) return { found: false } as const;
       let data = (await res.json()) as { id: string };
-      return data;
+      return { ...data, found: true };
     }
   );
+  if (data === undefined) return <div>loading</div>;
+  if (!data.found) return <div>404</div>;
 
-  let id = data?.id || null;
   return (
-    <ReplicacheProvider activity={id}>
-      <Socket id={id} />
-      {props.children}
-    </ReplicacheProvider>
+    <ReplicacheProvider activity={data.id}>{props.children}</ReplicacheProvider>
   );
 };
 
@@ -75,24 +78,25 @@ const StudioProvider: React.FC = (props) => {
   let studio = router.query.studio as string;
   let { data: auth } = useAuthentication();
   let { data } = useSWR(
-    auth?.loggedIn && auth.token.username === studio
+    (auth?.loggedIn && auth.token.username === studio) || !studio
       ? null
       : `/v0/studio/${studio}`,
-    async (k) => {
-      let res = await fetch(process.env.NEXT_PUBLIC_WORKER_URL + k);
+    async (key) => {
+      let res = await fetch(process.env.NEXT_PUBLIC_WORKER_URL + key);
+      if (res.status !== 200) return { found: false } as const;
       let data = (await res.json()) as { id: string };
-      return data;
+      return { ...data, found: true };
     }
   );
+  if (data === undefined && !auth) return <div>loading</div>;
+  if (data && !data.found) return <div>404</div>;
+
   let id =
     auth?.loggedIn && auth.token.username === studio
       ? auth.token.studio
       : data?.id || null;
   return (
-    <ReplicacheProvider activity={id}>
-      <Socket id={id} />
-      {props.children}
-    </ReplicacheProvider>
+    <ReplicacheProvider activity={id}>{props.children}</ReplicacheProvider>
   );
 };
 
@@ -147,23 +151,5 @@ function Nav() {
     </div>
   );
 }
-
-const Socket = (props: { id: string | null }) => {
-  let socket = useRef<WebSocket>();
-  let rep = useReplicache();
-  useEffect(() => {
-    if (!props.id) return;
-    socket.current = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WORKER_SOCKET}/v0/activity/${props.id}/poke`
-    );
-    socket.current.addEventListener("message", () => {
-      rep.pull();
-    });
-    return () => {
-      socket.current?.close();
-    };
-  }, [props.id]);
-  return null;
-};
 
 export default MyApp;

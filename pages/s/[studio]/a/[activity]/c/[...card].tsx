@@ -38,10 +38,9 @@ const Deck = (props: { entityID: string; section?: string }) => {
   return (
     <div className="h-full flex flex-col items-stretch relative pt-8">
       <div className="px-4 grid grid-flow-col items-center w-full pr-10 pb-2">
-        <h4 className="uppercase text-accent-blue font-bold">{`${
-          Name?.value.value
-        }${props.section ? `/${props.section}` : ""}`}</h4>
-        <Link href="/">
+        <h4 className="uppercase text-accent-blue font-bold">{`${Name?.value.value
+          }${props.section ? `/${props.section}` : ""}`}</h4>
+        <Link href={`/s/${router.query.studio}/a/${router.query.activity}`}>
           <a className="text-grey-15 justify-self-end">
             <Cross />
           </a>
@@ -109,9 +108,8 @@ const CardCounter = (props: {
       >
         <Arrow left className="text-accent-blue" />
       </button>
-      <div className="text-grey-35 font-bold grid content-center">{`${
-        props.position + 1
-      } / ${props.length}`}</div>
+      <div className="text-grey-35 font-bold grid content-center">{`${props.position + 1
+        } / ${props.length}`}</div>
       <button
         onClick={() => {
           if (props.position < props.length - 1)

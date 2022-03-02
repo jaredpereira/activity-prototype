@@ -9,14 +9,20 @@ export default function StudioPage() {
   let activities = useFact("ave", "activity");
   let { data: auth } = useAuthentication();
   return (
-    <div>
-      {activities.map((f) => (
-        <Activity
-          key={f.id}
-          id={f.entity}
-          activityId={f.value.value as string}
-        />
-      ))}
+    <div className="p-6">
+      <h1 className="text-4xl capitalize">
+        {router.query.studio}&apos;s Studio
+      </h1>
+      <h4 className="text-sm text-grey-35 font-bold">JUST YOU</h4>
+      <div className="flex flex-row flex-wrap">
+        {activities.map((f) => (
+          <Activity
+            key={f.id}
+            id={f.entity}
+            activityId={f.value.value as string}
+          />
+        ))}
+      </div>
       {auth?.loggedIn && auth.token.username === router.query.studio ? (
         <CreateActivity studioID={auth.token.studio} />
       ) : null}
@@ -30,7 +36,11 @@ const Activity = (props: { id: string; activityId: string }) => {
   if (!name) return null;
   return (
     <Link href={`/s/${router.query.studio}/a/${name.value.value}`}>
-      <a>{name.value.value}</a>
+      <a className="">
+        <div className="p-4 rounded-md bg-white shadow-drop border-[1px] border-grey-55 max-w-sm w-max">
+          <h3 className="text-xl font-bold ">{name.value.value}</h3>
+        </div>
+      </a>
     </Link>
   );
 };

@@ -117,14 +117,16 @@ const MultipleCardSection = (props: { entityID: string; section: string }) => {
         null
       ),
     });
-    router.push(`/c/${props.entityID}/${props.section}?position=${id}`);
+    router.push(
+      `/s/${router.query.studio}/a/${router.query.activity}/c/${props.entityID}/${props.section}?position=${id}`
+    );
   };
   return (
     <div className="flex flex-row gap-2 flex-wrap">
       {facts.map((m) => (
         <Card
           key={m.id}
-          href={`/c/${props.entityID}/${props.section}?position=${m.value.value}`}
+          href={`/s/${router.query.studio}/a/${router.query.activity}/c/${props.entityID}/${props.section}?position=${m.value.value}`}
           entityID={m.value.value as string}
         />
       ))}
