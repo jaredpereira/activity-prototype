@@ -179,6 +179,7 @@ const addCardToSection: Mutation<{
 };
 
 const addNewSection: Mutation<{
+  newEntity: string;
   cardEntity: string;
   position: string;
   name: string;
@@ -189,16 +190,15 @@ const addNewSection: Mutation<{
     client: async (tx) => {
       let schema = await clientGetSchema(tx, args.name);
       if (!schema) {
-        let newEntity = ulid();
         await Promise.all([
           clientAssert(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "name",
             value: { type: "string", value: args.name },
             positions: {},
           }),
           clientAssert(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "type",
             value: {
               type: "union",
@@ -207,7 +207,7 @@ const addNewSection: Mutation<{
             positions: {},
           }),
           clientAssert(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "cardinality",
             value: {
               type: "union",
@@ -237,24 +237,23 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-              eav: generateKeyBetween(null, null),
-            }
+                eav: generateKeyBetween(null, null),
+              }
             : {},
       });
     },
     server: async (tx) => {
       let schema = await serverGetSchema(tx, args.name);
       if (!schema) {
-        let newEntity = ulid();
         await Promise.all([
           serverAssertFact(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "name",
             value: { type: "string", value: args.name },
             positions: {},
           }),
           serverAssertFact(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "type",
             value: {
               type: "union",
@@ -263,7 +262,7 @@ const addNewSection: Mutation<{
             positions: {},
           }),
           serverAssertFact(tx, {
-            entity: newEntity,
+            entity: args.newEntity,
             attribute: "cardinality",
             value: {
               type: "union",
@@ -293,8 +292,8 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-              eav: generateKeyBetween(null, null),
-            }
+                eav: generateKeyBetween(null, null),
+              }
             : {},
       });
     },

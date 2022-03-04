@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import React, { useEffect, useRef, useState } from "react";
 import { generateKeyBetween } from "src/fractional-indexing";
+import { ulid } from "src/ulid";
 import { useReplicache, useFact } from "src/useReplicache";
 import { sortByPosition } from "src/utils";
 import Textarea from "./AutosizeTextarea";
@@ -169,6 +170,7 @@ const Sections = (props: { entityID: string }) => {
         createNewSection={async (args) => {
           setNewSection(args.name);
           await rep.mutate.addNewSection({
+            newEntity: ulid(),
             name: args.name,
             type: args.type,
             firstValue: args.initialValue,
