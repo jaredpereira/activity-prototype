@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
 import { Fact, MyPullResponse } from "../backend/ActivityDurableObject";
@@ -74,9 +74,28 @@ export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
 
   return (
     <ReplicacheContext.Provider value={rep}>
+      {!rep ? null : <Socket id={props.activity} />}
       {!rep ? "loading" : props.children}
     </ReplicacheContext.Provider>
   );
+};
+
+const Socket = (props: { id: string | null }) => {
+  let socket = useRef<WebSocket>();
+  let rep = useReplicache();
+  useEffect(() => {
+    if (!props.id) return;
+    socket.current = new WebSocket(
+      `${process.env.NEXT_PUBLIC_WORKER_SOCKET}/v0/activity/${props.id}/poke`
+    );
+    socket.current.addEventListener("message", () => {
+      rep.pull();
+    });
+    return () => {
+      socket.current?.close();
+    };
+  }, [props.id]);
+  return null;
 };
 
 export const useReplicache = () => {
