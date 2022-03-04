@@ -2,7 +2,7 @@ import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { ulid } from "src/ulid";
 import { Mutations } from "./mutations";
 import { init } from "./populate";
-import { Schema, writeFactToStorage } from "./writes";
+import { Schema, serverAssertFact, writeFactToStorage } from "./writes";
 
 type Cookie = {
   lastUpdated: string;
@@ -24,13 +24,13 @@ export type Value =
   | { type: "reference"; value: string }
   | { type: "union"; value: string }
   | {
-      type: "string";
-      value: string;
-    }
+    type: "string";
+    value: string;
+  }
   | {
-      type: "boolean";
-      value: boolean;
-    };
+    type: "boolean";
+    value: boolean;
+  };
 
 export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
@@ -43,6 +43,7 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 // Durable Object
 export class ActivityDurableObject implements DurableObject {
   version = 31;
+  creator: string | undefined;
 
   constructor(
     private readonly state: DurableObjectState,
@@ -106,8 +107,8 @@ export class ActivityDurableObject implements DurableObject {
               f.attribute === "cardinality"
                 ? { type: "union", value: f.value as string }
                 : typeof f.value === `string`
-                ? { type: "string", value: f.value }
-                : { type: "boolean", value: f.value };
+                  ? { type: "string", value: f.value }
+                  : { type: "boolean", value: f.value };
             let newData: Fact = {
               ...f,
               value,
@@ -150,6 +151,32 @@ export class ActivityDurableObject implements DurableObject {
     let url = new URL(request.url);
     let path = url.pathname.split("/");
     switch (path[1]) {
+      case "init": {
+        if (this.creator) return new Response(JSON.stringify({ errors: ['already initialized'] }))
+        let data: { creator: string, name: string } = await request.json()
+        await Promise.all([
+          serverAssertFact(this.state.storage, {
+            entity: ulid(),
+            attribute: "activity/member",
+            positions: { aev: "a0" },
+            value: {
+              type: "string",
+              value: data.creator
+            }
+          }),
+          serverAssertFact(this.state.storage, {
+            entity: ulid(),
+            attribute: "activity/name",
+            positions: { aev: "a0" },
+            value: {
+              type: "string",
+              value: data.name
+            }
+          })
+        ])
+        this.creator = data.creator
+        return new Response(JSON.stringify([]), { status: 200 })
+      }
       case "dump": {
         return new Response(
           JSON.stringify([...(await this.state.storage.list())]),
@@ -159,64 +186,11 @@ export class ActivityDurableObject implements DurableObject {
       case "activity": {
         switch (request.method) {
           case "GET": {
-            let entity = await this.state.storage.get<Fact>(
-              `av-name-${path[2]}`
-            );
-            if (!entity)
-              return new Response(JSON.stringify({}), { status: 404 });
-            let activity = [
-              ...(
-                await this.state.storage.list<Fact>({
-                  prefix: `ea-${entity.entity}-activity`,
-                })
-              ).values(),
-            ];
-            if (!activity[0])
-              return new Response(JSON.stringify({}), { status: 404 });
-            return new Response(activity[0].value.value as string, {
-              status: 200,
-            });
+            return this.getActitivy(path[2]);
           }
           case "POST": {
             let body: { name: string } = await request.json();
-            let existingActivity = await this.state.storage.get<Fact>(
-              `av-name-${body.name}`
-            );
-            if (existingActivity) {
-              return new Response(
-                JSON.stringify({ errors: ["Activity already exists"] }),
-                { status: 401 }
-              );
-            }
-            let newEntity = ulid();
-            let newActivity = this.env.ACTIVITY.newUniqueId().toString();
-            await Promise.all([
-              writeFactToStorage(
-                this.state.storage,
-                {
-                  id: ulid(),
-                  entity: newEntity,
-                  attribute: "name",
-                  lastUpdated: Date.now().toString(),
-                  value: { type: "string", value: body.name },
-                  positions: {},
-                },
-                { unique: true, cardinality: "one", type: "string" }
-              ),
-              writeFactToStorage(
-                this.state.storage,
-                {
-                  id: ulid(),
-                  entity: newEntity,
-                  attribute: "activity",
-                  lastUpdated: Date.now().toString(),
-                  value: { type: "string", value: newActivity },
-                  positions: {},
-                },
-                { unique: true, cardinality: "one", type: "string" }
-              ),
-            ]);
-            return new Response(JSON.stringify({}), { status: 200 });
+            return this.createActivity(body.name);
           }
         }
         return new Response(
@@ -229,14 +203,70 @@ export class ActivityDurableObject implements DurableObject {
       case "push":
         return this.push(request);
       case "poke":
-        console.log("poke websocket connecting");
         return this.pokeEndpoint(request);
       default:
         return new Response("Not found", {
           status: 404,
-          headers: {},
         });
     }
+  }
+
+  async getActitivy(name: string) {
+    let entity = await this.state.storage.get<Fact>(`av-name-${name}`);
+    if (!entity) return new Response(JSON.stringify({}), { status: 404 });
+    let activity = [
+      ...(
+        await this.state.storage.list<Fact>({
+          prefix: `ea-${entity.entity}-activity`,
+        })
+      ).values(),
+    ];
+    if (!activity[0]) return new Response(JSON.stringify({}), { status: 404 });
+    return new Response(activity[0].value.value as string, {
+      status: 200,
+    });
+  }
+  async createActivity(name: string) {
+    if (!this.creator) return new Response(JSON.stringify({ errors: ["Activity not initialized"] }), { status: 400 })
+    let existingActivity = await this.state.storage.get<Fact>(
+      `av-name-${name}`
+    );
+    if (existingActivity) {
+      return new Response(
+        JSON.stringify({ errors: ["Activity already exists"] }),
+        { status: 401 }
+      );
+    }
+    let newEntity = ulid();
+    let newActivity = this.env.ACTIVITY.newUniqueId();
+    await this.env.ACTIVITY.get(newActivity).fetch('http://internal/init', { method: "POST", body: JSON.stringify({ name: name, creator: this.creator }) })
+    await Promise.all([
+      writeFactToStorage(
+        this.state.storage,
+        {
+          id: ulid(),
+          entity: newEntity,
+          attribute: "name",
+          lastUpdated: Date.now().toString(),
+          value: { type: "string", value: name },
+          positions: {},
+        },
+        { unique: true, cardinality: "one", type: "string" }
+      ),
+      writeFactToStorage(
+        this.state.storage,
+        {
+          id: ulid(),
+          entity: newEntity,
+          attribute: "activity",
+          lastUpdated: Date.now().toString(),
+          value: { type: "string", value: newActivity.toString() },
+          positions: {},
+        },
+        { unique: true, cardinality: "one", type: "string" }
+      ),
+    ]);
+    return new Response(JSON.stringify({}), { status: 200 });
   }
 
   async pull(request: Request): Promise<Response> {
@@ -274,19 +304,14 @@ export class ActivityDurableObject implements DurableObject {
         lastMutationID,
         data: updates,
       };
-      return new Response(JSON.stringify(response), {
-        headers: {},
-      });
+      return new Response(JSON.stringify(response), {});
     } catch (e) {
       console.log(e);
       new Response(JSON.stringify(e), {
         status: 400,
-        headers: {},
       });
     }
-    return new Response(JSON.stringify({ msg: "shouldn't reach here" }), {
-      headers: {},
-    });
+    return new Response(JSON.stringify({ msg: "shouldn't reach here" }), {});
   }
 
   async push(request: Request) {
@@ -324,7 +349,6 @@ export class ActivityDurableObject implements DurableObject {
     this.sendPoke();
     return new Response(JSON.stringify({}), {
       status: 200,
-      headers: {},
     });
   }
 

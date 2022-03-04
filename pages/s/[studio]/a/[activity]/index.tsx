@@ -15,12 +15,19 @@ import { useRouter } from "next/router";
 const Home: NextPage = () => {
   return (
     <div className="h-full w-full">
+      <Title />
       <DeckList />
     </div>
   );
 };
 
 export default Home;
+
+function Title() {
+  let name = useFact("aev", "activity/name")[0]
+  return <h1 className='text-3xl font-bold px-5 pt-2'>{name?.value.value}</h1>
+
+}
 
 function DeckList() {
   let entities = useFact("aev", "deck").sort(sortByPosition("aev"));
