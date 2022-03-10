@@ -7,6 +7,7 @@ import { useAuthentication } from "backend/auth";
 import { LoginForm } from "src/components/LoginForm";
 import { useRouter } from "next/router";
 import useSWR from "swr";
+import { ChatBubble, Deck, House, Information } from "src/Icons";
 
 function MyApp({ Component, pageProps }: AppProps) {
   let { data: auth } = useAuthentication();
@@ -121,7 +122,10 @@ const Layout: React.FC = (props) => {
 };
 
 function Nav() {
-  let { data: auth, mutate } = useAuthentication();
+  let { data: auth } = useAuthentication();
+  let router = useRouter();
+  console.log(router);
+  if (!router.pathname.startsWith("/s/[studio]/a/[activity]")) return null;
   return (
     <div
       style={{
@@ -129,25 +133,32 @@ function Nav() {
         maxWidth: "100vw",
         height: "32px",
       }}
-      className={`border-2 grid grid-flow-col gap-1 auto-cols-min justify-center bg-grey-55`}
+      className={`grid items-center grid-cols-[1fr,1fr,1fr] gap-1  bg-background border-t-2 px-4 border-grey-15`}
     >
       <Link href={!auth?.loggedIn ? `/` : `/s/${auth.token.username}`}>
-        <a>home</a>
+        <a className="justify-self-start">
+          <House className="text-grey-55" />
+        </a>
       </Link>
-      <Link href="/chat">
-        <a>chat</a>
+
+      <div className="justify-self-center flex flex-row">
+        <Link href={`/s/${router.query.studio}/a/${router.query.activity}`}>
+          <a className="border-2 border-t-0 rounded-b-lg px-2 relative -top-0.5 bg-background border-grey-15">
+            <Deck />
+          </a>
+        </Link>
+
+        <Link href="/chat">
+          <a>
+            <ChatBubble />
+          </a>
+        </Link>
+      </div>
+      <Link href="/">
+        <a className="justify-self-end">
+          <Information className="text-grey-55" />
+        </a>
       </Link>
-      <button
-        onClick={async () => {
-          await fetch(`${process.env.NEXT_PUBLIC_WORKER_URL}/v0/auth/logout`, {
-            method: "POST",
-            credentials: "include",
-          });
-          mutate();
-        }}
-      >
-        logout
-      </button>
     </div>
   );
 }
