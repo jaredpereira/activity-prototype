@@ -37,7 +37,9 @@ export const NewDeck = (props: { position: string }) => {
         onClick={() => {
           create();
         }}
-      ></button>
+      >
+        create
+      </button>
     </div>
   );
 };

@@ -109,13 +109,15 @@ const Layout: React.FC = (props) => {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        paddingBottom: "32px",
+        paddingBottom: "16px",
         alignItems: "stretch",
         position: "relative",
       }}
       className="bg-background"
     >
-      {props.children}
+      <div className='overflow-y-scroll h-full'>
+        {props.children}
+      </div>
       <Nav />
     </div>
   );
@@ -131,7 +133,6 @@ function Nav() {
       style={{
         width: "100%",
         maxWidth: "100vw",
-        height: "32px",
       }}
       className={`grid items-center grid-cols-[1fr,1fr,1fr] gap-1  bg-background border-t-2 px-4 border-grey-15`}
     >
