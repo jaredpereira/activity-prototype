@@ -3,6 +3,7 @@ import {
   handleSessionRequest,
   handleLogoutRequest,
 } from "./auth";
+import { Bindings } from "./bindings";
 
 export default {
   fetch: handleRequest,

@@ -1,5 +1,6 @@
 import { Fact, FactInput } from "./ActivityDurableObject";
 import { ulid } from "../src/ulid";
+import { q } from "./query";
 type Result =
   | { error: false; result: Fact }
   | { error: true; message: string; data?: any };
@@ -10,7 +11,7 @@ export type Schema = {
   type: Fact["value"]["type"];
 };
 
-const indexes = {
+export const indexes = {
   ea: (entity: string, attribute: string, factID: string) =>
     `ea-${entity}-${attribute}-${factID}`,
   av: (attribute: string, value: string) => `av-${attribute}-${value}`,
@@ -21,7 +22,7 @@ export async function serverGetSchema(
   tx: DurableObjectStorage,
   attribute: string
 ): Promise<Schema | undefined> {
-  let attributeFact = await tx.get<Fact>(`av-name-${attribute}`);
+  let attributeFact = await q(tx).attribute("name").find(attribute);
   if (!attributeFact) return;
 
   let attributeData = [

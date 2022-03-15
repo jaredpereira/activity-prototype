@@ -1,8 +1,10 @@
 import { PullRequest, PullResponse, PushRequest } from "replicache";
 import { ulid } from "src/ulid";
+import { Bindings } from "./bindings";
 import { Mutations } from "./mutations";
 import { init } from "./populate";
-import { Schema, serverAssertFact, writeFactToStorage } from "./writes";
+import { q } from "./query";
+import { Schema, serverAssertFact } from "./writes";
 
 type Cookie = {
   lastUpdated: string;
@@ -24,13 +26,13 @@ export type Value =
   | { type: "reference"; value: string }
   | { type: "union"; value: string }
   | {
-    type: "string";
-    value: string;
-  }
+      type: "string";
+      value: string;
+    }
   | {
-    type: "boolean";
-    value: boolean;
-  };
+      type: "boolean";
+      value: boolean;
+    };
 
 export type FactInput = Omit<Fact, "lastUpdated" | "id">;
 
@@ -43,101 +45,20 @@ export type MyPullResponse = Omit<PullResponse, "patch"> & {
 // Durable Object
 export class ActivityDurableObject implements DurableObject {
   version = 31;
-  creator: string | undefined;
+  query: ReturnType<typeof q>;
 
   constructor(
     private readonly state: DurableObjectState,
     private readonly env: Bindings
   ) {
+    this.query = q(this.state.storage);
     this.state.blockConcurrencyWhile(async () => {
       let lastVersion =
         (await this.state.storage.get<number>("meta-lastVersion")) || 0;
       if (lastVersion >= this.version) return;
       await this.state.storage.deleteAll();
       await this.state.storage.put("meta-lastVersion", this.version);
-
       try {
-        let e = {
-          name: ulid(),
-          unique: ulid(),
-          type: ulid(),
-          "union/value": ulid(),
-          cardinatlity: ulid(),
-          title: ulid(),
-          textContent: ulid(),
-        };
-        const initialFacts = [
-          { entity: e.name, attribute: "name", value: "name" },
-          { entity: e.name, attribute: "unique", value: true },
-          { entity: e.name, attribute: "type", value: "string" },
-
-          { entity: e.unique, attribute: "name", value: "unique" },
-          { entity: e.unique, attribute: "type", value: "boolean" },
-
-          { entity: e.type, attribute: "name", value: "type" },
-          { entity: e.type, attribute: "type", value: "union" },
-          { entity: e.type, attribute: `union/value`, value: `string` },
-          { entity: e.type, attribute: `union/value`, value: `union` },
-          { entity: e.type, attribute: `union/value`, value: `reference` },
-          { entity: e.type, attribute: `union/value`, value: `boolean` },
-
-          { entity: e["union/value"], attribute: "name", value: `union/value` },
-          { entity: e["union/value"], attribute: "type", value: `string` },
-          { entity: e["union/value"], attribute: "cardinality", value: `many` },
-
-          { entity: e.cardinatlity, attribute: "name", value: "cardinality" },
-          { entity: e.cardinatlity, attribute: "type", value: "union" },
-          { entity: e.cardinatlity, attribute: "union/value", value: "many" },
-          { entity: e.cardinatlity, attribute: "union/value", value: "one" },
-        ];
-
-        let lastUpdated = Date.now().toString();
-        await Promise.all(
-          initialFacts.map(async (f) => {
-            let attribute = initialFacts.find(
-              (initialFact) =>
-                initialFact.attribute === "name" &&
-                initialFact.value === f.attribute
-            );
-            if (!attribute)
-              throw new Error(
-                "tried to initialize with uninitialized attribute!"
-              );
-            let value: Value =
-              f.attribute === "cardinality"
-                ? { type: "union", value: f.value as string }
-                : typeof f.value === `string`
-                  ? { type: "string", value: f.value }
-                  : { type: "boolean", value: f.value };
-            let newData: Fact = {
-              ...f,
-              value,
-              id: ulid(),
-              positions: {},
-              lastUpdated,
-            };
-            await writeFactToStorage(this.state.storage, newData, {
-              type:
-                (initialFacts.find(
-                  (f) =>
-                    f.entity === e[newData.attribute as keyof typeof e] &&
-                    f.attribute === "type"
-                )?.value as Schema["type"]) || "string",
-              cardinality:
-                (initialFacts.find(
-                  (f) =>
-                    f.entity === e[newData.attribute as keyof typeof e] &&
-                    f.attribute === "cardinality"
-                )?.value as "one" | "many") || "one",
-              unique: !!initialFacts.find(
-                (f) =>
-                  f.entity === e[newData.attribute as keyof typeof e] &&
-                  f.attribute === "unique" &&
-                  f.value === true
-              ),
-            });
-          })
-        );
         await init(this.state.storage);
       } catch (e) {
         console.log("CONSTRUCTOR ERROR", e);
@@ -152,8 +73,13 @@ export class ActivityDurableObject implements DurableObject {
     let path = url.pathname.split("/");
     switch (path[1]) {
       case "init": {
-        if (this.creator) return new Response(JSON.stringify({ errors: ['already initialized'] }))
-        let data: { creator: string, name: string } = await request.json()
+        let creator = await this.state.storage.get("meta-creator");
+        if (creator)
+          return new Response(
+            JSON.stringify({ errors: ["already initialized"] }),
+            { status: 401 }
+          );
+        let data: { creator: string; name: string } = await request.json();
         await Promise.all([
           serverAssertFact(this.state.storage, {
             entity: ulid(),
@@ -161,8 +87,8 @@ export class ActivityDurableObject implements DurableObject {
             positions: { aev: "a0" },
             value: {
               type: "string",
-              value: data.creator
-            }
+              value: data.creator,
+            },
           }),
           serverAssertFact(this.state.storage, {
             entity: ulid(),
@@ -170,12 +96,12 @@ export class ActivityDurableObject implements DurableObject {
             positions: { aev: "a0" },
             value: {
               type: "string",
-              value: data.name
-            }
-          })
-        ])
-        this.creator = data.creator
-        return new Response(JSON.stringify([]), { status: 200 })
+              value: data.name,
+            },
+          }),
+        ]);
+        await this.state.storage.put("meta-creator", data.creator);
+        return new Response(JSON.stringify([]), { status: 200 });
       }
       case "dump": {
         return new Response(
@@ -183,6 +109,7 @@ export class ActivityDurableObject implements DurableObject {
           {}
         );
       }
+
       case "activity": {
         switch (request.method) {
           case "GET": {
@@ -212,25 +139,22 @@ export class ActivityDurableObject implements DurableObject {
   }
 
   async getActitivy(name: string) {
-    let entity = await this.state.storage.get<Fact>(`av-name-${name}`);
+    let entity = await this.query.attribute("name").find(name);
     if (!entity) return new Response(JSON.stringify({}), { status: 404 });
-    let activity = [
-      ...(
-        await this.state.storage.list<Fact>({
-          prefix: `ea-${entity.entity}-activity`,
-        })
-      ).values(),
-    ];
-    if (!activity[0]) return new Response(JSON.stringify({}), { status: 404 });
-    return new Response(activity[0].value.value as string, {
+    let activity = await this.query.entity(entity.entity).get("activity");
+    if (!activity) return new Response(JSON.stringify({}), { status: 404 });
+    return new Response(activity.value.value, {
       status: 200,
     });
   }
   async createActivity(name: string) {
-    if (!this.creator) return new Response(JSON.stringify({ errors: ["Activity not initialized"] }), { status: 400 })
-    let existingActivity = await this.state.storage.get<Fact>(
-      `av-name-${name}`
-    );
+    let creator = await this.state.storage.get("meta-creator");
+    if (!creator)
+      return new Response(
+        JSON.stringify({ errors: ["Activity not initialized"] }),
+        { status: 400 }
+      );
+    let existingActivity = await this.query.attribute("name").find(name);
     if (existingActivity) {
       return new Response(
         JSON.stringify({ errors: ["Activity already exists"] }),
@@ -239,32 +163,23 @@ export class ActivityDurableObject implements DurableObject {
     }
     let newEntity = ulid();
     let newActivity = this.env.ACTIVITY.newUniqueId();
-    await this.env.ACTIVITY.get(newActivity).fetch('http://internal/init', { method: "POST", body: JSON.stringify({ name: name, creator: this.creator }) })
+    await this.env.ACTIVITY.get(newActivity).fetch("http://internal/init", {
+      method: "POST",
+      body: JSON.stringify({ name: name, creator }),
+    });
     await Promise.all([
-      writeFactToStorage(
-        this.state.storage,
-        {
-          id: ulid(),
-          entity: newEntity,
-          attribute: "name",
-          lastUpdated: Date.now().toString(),
-          value: { type: "string", value: name },
-          positions: {},
-        },
-        { unique: true, cardinality: "one", type: "string" }
-      ),
-      writeFactToStorage(
-        this.state.storage,
-        {
-          id: ulid(),
-          entity: newEntity,
-          attribute: "activity",
-          lastUpdated: Date.now().toString(),
-          value: { type: "string", value: newActivity.toString() },
-          positions: {},
-        },
-        { unique: true, cardinality: "one", type: "string" }
-      ),
+      serverAssertFact(this.state.storage, {
+        entity: newEntity,
+        attribute: "name",
+        positions: {},
+        value: { type: "string", value: name },
+      }),
+      serverAssertFact(this.state.storage, {
+        entity: newEntity,
+        attribute: "activity",
+        value: { type: "string", value: newActivity.toString() },
+        positions: {},
+      }),
     ]);
     return new Response(JSON.stringify({}), { status: 200 });
   }
