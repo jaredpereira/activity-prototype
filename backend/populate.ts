@@ -1,5 +1,6 @@
 import { ulid } from "../src/ulid";
 import { Value } from "./ActivityDurableObject";
+import { AttributeName } from "./query";
 import { Schema, serverAssertFact, writeFactToStorage } from "./writes";
 
 export const BaseAttributes = {
@@ -33,10 +34,25 @@ export const BaseAttributes = {
 } as const;
 
 const DefaultAttributes = {
+  arbitrarySectionReferenceType: {
+    type: "reference",
+    unique: false,
+    cardinality: "many",
+  },
+  arbitrarySectionStringType: {
+    type: "string",
+    unique: false,
+    cardinality: "one",
+  },
   section: {
     type: "string",
     unique: false,
     cardinality: "many",
+  },
+  title: {
+    type: "string",
+    unique: true,
+    cardinality: "one",
   },
   contains: {
     type: "reference",
@@ -98,7 +114,7 @@ export async function init(tx: DurableObjectStorage) {
   await Promise.all(
     Object.keys(BaseAttributes).map(async (attributeName) => {
       let entity = ulid();
-      const write = (attribute: string, value: any, schema: Schema) => {
+      const write = (attribute: AttributeName, value: any, schema: Schema) => {
         return writeFactToStorage(
           tx,
           {

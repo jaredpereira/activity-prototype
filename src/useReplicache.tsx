@@ -1,3 +1,4 @@
+import { AttributeName } from "backend/query";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
@@ -110,10 +111,10 @@ export const useFact = (index: string, prefix: string) => {
   return useSubscribe(
     rep,
     async (tx) => {
-      if (!prefix) return [] as Fact[];
+      if (!prefix) return [] as Fact<AttributeName>[];
       return tx.scan({ indexName: index, prefix }).values().toArray();
     },
     [],
     [index, prefix]
-  ) as Fact[];
+  ) as Fact<AttributeName>[];
 };

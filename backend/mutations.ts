@@ -8,26 +8,26 @@ import {
   serverGetSchema,
   serverUpdateFact,
 } from "./writes";
+import { AttributeName } from "./query";
 
 type Mutation<T> = (args: T) => {
   client: (tx: WriteTransaction) => Promise<any>;
   server: (tx: DurableObjectStorage) => Promise<any>;
 };
 
-export const processFact = (
+export function processFact<A extends AttributeName>(
   id: string,
-  f: FactInput | Fact,
+  f: FactInput<A> | Fact<A>,
   schema: Schema
-) => {
+) {
   let indexes: { eav: string; ave?: string; vae?: string; aev: string } = {
     eav: `${f.entity}-${f.attribute}-${id}`,
     aev: `${f.attribute}-${f.entity}-${id}`,
     ave: schema.unique ? `${f.attribute}-${f.value.value}` : "",
-    vae: schema.type === "reference" ? `${f.value.value}-${f.attribute}` : "",
+    vae: schema.type === `reference` ? `${f.value.value}-${f.attribute}` : "",
   };
-
   return { ...f, indexes };
-};
+}
 
 export const clientGetSchema = async (
   tx: ReadTransaction,
@@ -38,18 +38,18 @@ export const clientGetSchema = async (
       .scan({ indexName: "ave", prefix: `name-${attributeName}` })
       .values()
       .toArray()
-  )[0] as Fact;
+  )[0] as Fact<AttributeName>;
   if (!attribute) return;
 
   let attributeFacts = (await tx
     .scan({ indexName: "eav", prefix: `${attribute.entity}` })
     .values()
-    .toArray()) as Fact[];
+    .toArray()) as Fact<AttributeName>[];
 
   let schema: Schema = {
     type:
       (attributeFacts.find((f) => f.attribute === "type")?.value
-        .value as Fact["value"]["type"]) || "string",
+        .value as Fact<"type">["value"]["type"]) || "string",
     unique: !!attributeFacts.find((f) => f.attribute === "unique")?.value
       .value as boolean,
     cardinality:
@@ -59,7 +59,10 @@ export const clientGetSchema = async (
   return schema;
 };
 
-const clientAssert = async (tx: WriteTransaction, f: FactInput) => {
+async function clientAssert<A extends AttributeName>(
+  tx: WriteTransaction,
+  f: FactInput<A>
+) {
   let schema = await clientGetSchema(tx, f.attribute);
   if (!schema) throw new Error(`no attribute ${f.attribute} found`);
 
@@ -68,7 +71,7 @@ const clientAssert = async (tx: WriteTransaction, f: FactInput) => {
     let existingFact = (await tx
       .scan({ indexName: `eav`, prefix: `${f.entity}-${f.attribute}` })
       .entries()
-      .toArray()) as [[string, string], Fact][];
+      .toArray()) as [[string, string], Fact<A>][];
 
     if (existingFact[0]) {
       newID = existingFact[0][1].id;
@@ -77,7 +80,7 @@ const clientAssert = async (tx: WriteTransaction, f: FactInput) => {
 
   let data = processFact(newID, f, schema);
   return tx.put(newID, { ...data, id: newID });
-};
+}
 
 const clientRetract = async (tx: WriteTransaction, factID: string) => {
   tx.del(factID);
@@ -88,12 +91,12 @@ const createNewCard: Mutation<{
   entity: string;
   position: string;
 }> = (args) => {
-  let fact = {
+  let fact: FactInput<"title"> = {
     positions: { aev: args.position },
     entity: args.entity,
     attribute: "title",
     value: { type: "string", value: args.title },
-  } as const;
+  };
   return {
     client: async (tx) => {
       return clientAssert(tx, fact);
@@ -104,7 +107,7 @@ const createNewCard: Mutation<{
   };
 };
 
-const assertFact: Mutation<FactInput> = (args) => {
+const assertFact: Mutation<FactInput<AttributeName>> = (args) => {
   return {
     client: async (tx) => clientAssert(tx, args),
     server: async (tx) => {
@@ -119,7 +122,7 @@ const updatePosition: Mutation<{
 }> = (args) => {
   return {
     client: async (tx) => {
-      let fact = (await tx.get(args.factID)) as Fact | undefined;
+      let fact = (await tx.get(args.factID)) as Fact<AttributeName> | undefined;
       if (!fact) return;
       tx.put(args.factID, {
         ...fact,
@@ -144,7 +147,9 @@ const deleteCard: Mutation<{ cardID: string }> = (args) => {
       });
     },
     server: async (tx) => {
-      let allFacts = await tx.list<Fact>({ prefix: `ea-${args.cardID}` });
+      let allFacts = await tx.list<Fact<AttributeName>>({
+        prefix: `ea-${args.cardID}`,
+      });
       allFacts.forEach((f) => {
         serverUpdateFact(tx, f.id, { retracted: true });
       });
@@ -158,22 +163,18 @@ const addCardToSection: Mutation<{
   position: string;
   newCard: string;
 }> = (args) => {
+  let fact = {
+    entity: args.entity,
+    attribute: args.section as "arbitrarySectionReferenceType",
+    value: { type: "reference", value: args.newCard },
+    positions: { eav: args.position },
+  } as const;
   return {
     client: async (tx) => {
-      return clientAssert(tx, {
-        entity: args.entity,
-        attribute: args.section,
-        value: { type: "reference", value: args.newCard },
-        positions: { eav: args.position },
-      });
+      return clientAssert(tx, fact);
     },
     server: async (tx) => {
-      return serverAssertFact(tx, {
-        entity: args.entity,
-        attribute: args.section,
-        value: { type: "reference", value: args.newCard },
-        positions: { eav: args.position },
-      });
+      return serverAssertFact(tx, fact);
     },
   };
 };
@@ -229,7 +230,9 @@ const addNewSection: Mutation<{
 
       await clientAssert(tx, {
         entity: args.cardEntity,
-        attribute: args.name,
+        attribute: args.name as
+          | "arbitrarySectionReferenceType"
+          | "arbitrarySectionStringType",
         value: {
           type: args.type === "cards" ? "reference" : "string",
           value: args.firstValue,
@@ -284,7 +287,9 @@ const addNewSection: Mutation<{
 
       await serverAssertFact(tx, {
         entity: args.cardEntity,
-        attribute: args.name,
+        attribute: args.name as
+          | "arbitrarySectionReferenceType"
+          | "arbitrarySectionStringType",
         value: {
           type: args.type === "cards" ? "reference" : "string",
           value: args.firstValue,
@@ -338,11 +343,39 @@ const addNewDeck: Mutation<{ name: string; id: string; position: string }> = (
   };
 };
 
+const joinActivity: Mutation<{ user: string; newEntity: string }> = (args) => {
+  return {
+    client: async (tx) => {
+      return clientAssert(tx, {
+        entity: args.newEntity,
+        attribute: "activity/member",
+        positions: {},
+        value: {
+          type: "string",
+          value: args.user,
+        },
+      });
+    },
+    server: async (tx) => {
+      return serverAssertFact(tx, {
+        entity: args.newEntity,
+        attribute: "activity/member",
+        positions: {},
+        value: {
+          type: "string",
+          value: args.user,
+        },
+      });
+    },
+  };
+};
+
 export const Mutations = {
   createNewCard,
   addNewDeck,
   addNewSection,
   addCardToSection,
+  joinActivity,
   assertFact,
   deleteCard,
   updatePosition,

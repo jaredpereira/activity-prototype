@@ -90,7 +90,7 @@ const SingleTextSection = (props: {
           end = e.currentTarget.selectionEnd;
         await rep.mutate.assertFact({
           entity: props.entityID,
-          attribute: props.section,
+          attribute: props.section as "arbitrarySectionStringType",
           value: { type: "string", value: e.currentTarget.value },
           positions: fact?.positions || {},
         });

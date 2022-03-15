@@ -3,7 +3,7 @@ import { ulid } from "src/ulid";
 import { Bindings } from "./bindings";
 import { Mutations } from "./mutations";
 import { init } from "./populate";
-import { q } from "./query";
+import { q, Fact, AttributeName } from "./query";
 import { Schema, serverAssertFact } from "./writes";
 
 type Cookie = {
@@ -11,15 +11,7 @@ type Cookie = {
   version?: number;
 };
 
-export type Fact = {
-  id: string;
-  lastUpdated: string;
-  retracted?: boolean;
-  positions: { [k: string]: string | undefined };
-  entity: string;
-  attribute: string;
-  value: Value;
-};
+export type { Fact, FactInput } from "./query";
 
 export type Value =
   | { type: "flag"; value: null }
@@ -34,11 +26,9 @@ export type Value =
       value: boolean;
     };
 
-export type FactInput = Omit<Fact, "lastUpdated" | "id">;
-
 export type MyPullResponse = Omit<PullResponse, "patch"> & {
   cookie?: Cookie;
-  data: (Fact & { meta: { schema: Schema } })[];
+  data: (Fact<AttributeName> & { meta: { schema: Schema } })[];
   clear?: boolean;
 };
 
@@ -197,7 +187,7 @@ export class ActivityDurableObject implements DurableObject {
       let version = cookie?.version || 0;
       if (version < this.version) lastUpdated = "";
       let map = await this.state.storage.list<
-        Fact & { meta: { schema: Schema } }
+        Fact<AttributeName> & { meta: { schema: Schema } }
       >({
         prefix: `ti`,
         start: `ti-${lastUpdated}`,

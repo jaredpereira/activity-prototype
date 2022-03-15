@@ -1,14 +1,14 @@
-import { Fact, FactInput } from "./ActivityDurableObject";
+import { Fact, FactInput, Value } from "./ActivityDurableObject";
 import { ulid } from "../src/ulid";
-import { q } from "./query";
-type Result =
-  | { error: false; result: Fact }
+import { AttributeName, q } from "./query";
+type Result<A extends AttributeName> =
+  | { error: false; result: Fact<A> }
   | { error: true; message: string; data?: any };
 
 export type Schema = {
   cardinality: "one" | "many";
   unique: boolean;
-  type: Fact["value"]["type"];
+  type: Value["type"];
 };
 
 export const indexes = {
@@ -27,14 +27,14 @@ export async function serverGetSchema(
 
   let attributeData = [
     ...(
-      await tx.list<Fact>({
+      await tx.list<Fact<AttributeName>>({
         prefix: `ea-${attributeFact.entity}`,
       })
     ).values(),
   ];
   let cardinality: "one" | "many" = "one";
   let unique: boolean = false;
-  let type: Fact["value"]["type"] = "string";
+  let type: Value["type"] = "string";
   let cardinalityFact = attributeData.find(
     (f) => f.attribute === "cardinality"
   );
@@ -43,7 +43,7 @@ export async function serverGetSchema(
   let uniqueFact = attributeData.find((f) => f.attribute === "unique");
   if (uniqueFact) unique = uniqueFact.value.value as boolean;
   let typeFact = attributeData.find((f) => f.attribute === "type");
-  if (typeFact) type = typeFact.value.value as Fact["value"]["type"];
+  if (typeFact) type = typeFact.value.value as Value["type"];
 
   return {
     cardinality,
@@ -52,10 +52,19 @@ export async function serverGetSchema(
   };
 }
 
-export async function serverAssertFact(
+export async function serverAssertFact<A extends AttributeName>(
   tx: DurableObjectStorage,
-  factInput: FactInput
-): Promise<Result> {
+  factInput: FactInput<A>
+): Promise<Result<A>> {
+  let result = await serverAssertFactBase(tx, factInput);
+  if (result.error) console.log(result);
+  return result;
+}
+
+export async function serverAssertFactBase<A extends AttributeName>(
+  tx: DurableObjectStorage,
+  factInput: FactInput<A>
+): Promise<Result<A>> {
   let schema = await serverGetSchema(tx, factInput.attribute);
   if (!schema)
     return {
@@ -66,7 +75,7 @@ export async function serverAssertFact(
   let id: string = ulid();
   if (schema.cardinality === "one") {
     let existingFact = [
-      ...(await tx.list<Fact>({
+      ...(await tx.list<Fact<A>>({
         prefix: `ea-${factInput.entity}-${factInput.attribute}`,
       })),
     ][0]?.[1];
@@ -82,8 +91,8 @@ export async function serverAssertFact(
         error: true,
         message: "Cannot have unique index on non string type",
       };
-    let existingValue = await tx.get<Fact>(
-      indexes.av(factInput.attribute, factInput.value.value)
+    let existingValue = await tx.get<Fact<A>>(
+      indexes.av(factInput.attribute, factInput.value.value as string)
     );
     if (existingValue && !existingValue.retracted)
       return {
@@ -110,9 +119,9 @@ export async function serverAssertFact(
 export async function serverUpdateFact(
   tx: DurableObjectStorage,
   fact: string,
-  data: Partial<Pick<Fact, "positions" | "retracted">>
-): Promise<Result> {
-  let existingFact = await tx.get<Fact>(`factID-${fact}`);
+  data: Partial<Pick<Fact<AttributeName>, "positions" | "retracted">>
+): Promise<Result<AttributeName>> {
+  let existingFact = await tx.get<Fact<AttributeName>>(`factID-${fact}`);
   if (!existingFact)
     return { error: true, message: `No fact with id ${fact} exists` };
 
@@ -124,7 +133,7 @@ export async function serverUpdateFact(
     };
 
   let lastUpdated = Date.now().toString();
-  let newFact: Fact = {
+  let newFact: Fact<AttributeName> = {
     ...existingFact,
     ...data,
     positions: { ...existingFact.positions, ...data.positions },
@@ -142,12 +151,12 @@ export async function serverUpdateFact(
 // This should only be called with already validated data, basically you are
 // just telling it what indexes need to be updated
 // This data is critical for pull, it's annoying its in this random file
-export async function writeFactToStorage(
+export async function writeFactToStorage<A extends AttributeName>(
   tx: DurableObjectStorage,
-  f: Fact,
+  f: Fact<A>,
   schema: Schema
 ) {
-  let existingFact = await tx.get<Fact>(indexes.factID(f.id));
+  let existingFact = await tx.get<Fact<A>>(indexes.factID(f.id));
   if (existingFact) {
     tx.delete(indexes.factID(f.id));
     tx.delete(indexes.ea(existingFact.entity, existingFact.attribute, f.id));
@@ -161,6 +170,7 @@ export async function writeFactToStorage(
   tx.put(indexes.factID(f.id), f);
   tx.put(indexes.ea(f.entity, f.attribute, f.id), f);
   tx.put(indexes.ti(f.lastUpdated, f.id), { ...f, meta: { schema } });
-  if (schema.unique)
+  if (schema.unique) {
     tx.put(indexes.av(f.attribute, f.value.value as string), f);
+  }
 }

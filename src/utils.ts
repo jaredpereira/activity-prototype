@@ -1,8 +1,12 @@
 import { Fact } from "backend/ActivityDurableObject";
+import { AttributeName } from "backend/query";
 
 export const sortByPosition =
   (key: string) =>
-  (a: Pick<Fact, "positions" | "id">, b: Pick<Fact, "positions" | "id">) => {
+  (
+    a: Pick<Fact<AttributeName>, "positions" | "id">,
+    b: Pick<Fact<AttributeName>, "positions" | "id">
+  ) => {
     let aPosition = a.positions[key],
       bPosition = b.positions[key];
     if (!aPosition) {
