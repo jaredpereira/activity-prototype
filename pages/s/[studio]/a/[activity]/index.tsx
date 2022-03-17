@@ -16,9 +16,11 @@ import { useAuthentication } from "backend/auth";
 
 const Home: NextPage = () => {
   return (
-    <div className="h-full w-full px-5">
-      <Title />
-      <Members />
+    <div className="h-full w-full">
+      <div className="px-5">
+        <Title />
+        <Members />
+      </div>
       <DeckList />
     </div>
   );
@@ -33,9 +35,12 @@ function Title() {
 
 function Members() {
   let members = useFact<"activity/member">("aev", "activity/member");
-  let { data: auth } = useAuthentication()
-  let isMember = !!useFact('ave', auth && auth.loggedIn ? `activity/member-${auth.token.studio}` : '')[0]
-  let activityURL = useActivityURL()
+  let { data: auth } = useAuthentication();
+  let isMember = !!useFact(
+    "ave",
+    auth && auth.loggedIn ? `activity/member-${auth.token.studio}` : ""
+  )[0];
+  let activityURL = useActivityURL();
   return (
     <Disclosure>
       <Disclosure.Button>Members ({members.length})</Disclosure.Button>
@@ -43,19 +48,23 @@ function Members() {
         {members.map((m) => (
           <Member key={m.entity} entityID={m.entity} />
         ))}
-        {!isMember ? null : <button
-          onClick={async () => {
-            let res = await fetch(`${activityURL}/share`, {
-              credentials: 'include'
-            });
-            if (res.status === 200) {
-              let data: { code: string } = (await res.json())
-              await navigator.clipboard.writeText(`${document.location.href}/join?code=${data.code}`)
-            }
-          }}
-        >
-          add member
-        </button>}
+        {!isMember ? null : (
+          <button
+            onClick={async () => {
+              let res = await fetch(`${activityURL}/share`, {
+                credentials: "include",
+              });
+              if (res.status === 200) {
+                let data: { code: string } = await res.json();
+                await navigator.clipboard.writeText(
+                  `${document.location.href}/join?code=${data.code}`
+                );
+              }
+            }}
+          >
+            add member
+          </button>
+        )}
       </Disclosure.Panel>
     </Disclosure>
   );
@@ -70,7 +79,7 @@ function DeckList() {
   let entities = useFact("aev", "deck").sort(sortByPosition("aev"));
   return (
     <div className="flex flex-col gap-4">
-      <div className="py-5 w-full">
+      <div className="p-5">
         <NewDeck
           position={generateKeyBetween(
             entities[entities.length - 1]?.positions.aev || null,
@@ -95,7 +104,7 @@ const Deck = (props: { entityID: string }) => {
   return (
     <div className="w-full">
       <div onClick={() => setOpen(!open)} className="cursor-pointer">
-        <h3 className="text-2xl">{name[0].value.value}</h3>
+        <h3 className="text-2xl px-5">{name[0].value.value}</h3>
       </div>
       <Transition
         show={open}
@@ -108,13 +117,12 @@ const Deck = (props: { entityID: string }) => {
       >
         <div
           style={{
-            width: `100vw`,
+            width: `100%`,
           }}
           className="bg-lightBG shadow-inner py-8 pb-2 max-h overflow-hidden"
         >
           <div
             style={{
-              width: `100vw`,
             }}
             className="flex flex-row gap-4 bg-slate-100 overflow-x-scroll no-scrollbar px-8 py-1"
           >
