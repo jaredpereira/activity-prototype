@@ -27,7 +27,7 @@ const Home: NextPage = () => {
 export default Home;
 
 function Title() {
-  let name = useFact<"activity/name">("aev", "activity/name")[0];
+  let name = useFact<"this/name">("aev", "this/name")[0];
   return <h1 className="text-3xl font-bold pt-2">{name?.value.value}</h1>;
 }
 

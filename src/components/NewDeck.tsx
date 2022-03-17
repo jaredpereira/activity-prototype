@@ -6,7 +6,6 @@ import { useMutation } from "src/useReplicache";
 export const NewDeck = (props: { position: string }) => {
   let [state, setState] = useState({ open: false, name: "" });
   let { mutate, authorized } = useMutation();
-  console.log(authorized);
   if (!state.open)
     return (
       <button

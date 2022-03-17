@@ -1,10 +1,11 @@
-import { useAuthentication } from "backend/auth";
+import { Session, Token, useAuthentication } from "backend/auth";
 import { AttributeName } from "backend/query";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
 import { useSubscribe } from "replicache-react";
 import { Fact, MyPullResponse } from "../backend/ActivityDurableObject";
 import { Mutations, processFact } from "../backend/mutations";
+import useSWR from "swr";
 
 type ReplicacheMutators = {
   [k in keyof typeof Mutations]: (
@@ -21,19 +22,18 @@ let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
 
 let ReplicacheContext = createContext<{
   rep: Replicache<ReplicacheMutators> | null;
-  activityURL: string
+  activityURL: string;
 } | null>(null);
 
 const NEXT_PUBLIC_WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
-export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
-  props
-) => {
+
+const useSetupReplicache = (activity: string | null) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
-  let activityURL = `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}`
+  let activityURL = `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${activity}`;
   useEffect(() => {
-    if (!props.activity) return;
+    if (!activity) return;
     const rep = new Replicache({
-      name: `activity-${props.activity}`,
+      name: `activity-${activity}`,
       schemaVersion: `27`,
       pushDelay: 500,
       pullURL: `${activityURL}/pull`,
@@ -80,26 +80,72 @@ export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
       rep.close();
       setRep(null);
     };
-  }, [props.activity]);
+  }, [activity]);
+  return { rep, activityURL };
+};
 
+let HomeStudioContext = createContext<
+  | {
+    loggedIn: true;
+    rep: Replicache<ReplicacheMutators>;
+    token: Token;
+    activityURL: string;
+  }
+  | { loggedIn: false }
+>({ loggedIn: false });
+
+export const HomeStudioProvider: React.FC<{}> = (props) => {
+  let { data: auth } = useSWR<Session>("/v0/auth/session", async (key) => {
+    let res = await fetch(process.env.NEXT_PUBLIC_WORKER_URL + key, {
+      credentials: "include",
+    });
+    let result = await res.json();
+    return result as Session;
+  });
+  let data = useSetupReplicache(auth?.loggedIn ? auth.token.studio : null);
   return (
-    <ReplicacheContext.Provider value={{ rep, activityURL }}>
-      {!rep ? null : <Socket id={props.activity} />}
-      {!rep ? "loading" : props.children}
+    <HomeStudioContext.Provider
+      value={
+        !auth?.loggedIn || !data.rep
+          ? { loggedIn: false }
+          : {
+            loggedIn: true,
+            rep: data.rep,
+            token: auth.token,
+            activityURL: data.activityURL,
+          }
+      }
+    >
+      {!data.rep || !auth?.loggedIn ? null : <Socket id={auth.token.studio} rep={data.rep} />}
+      {props.children}
+    </HomeStudioContext.Provider>
+  );
+};
+export const useHomeStudio = () => {
+  return useContext(HomeStudioContext);
+};
+
+export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
+  props
+) => {
+  let data = useSetupReplicache(props.activity);
+  return (
+    <ReplicacheContext.Provider value={data}>
+      {!data.rep ? null : <Socket id={props.activity} rep={data.rep} />}
+      {!data.rep ? "loading" : props.children}
     </ReplicacheContext.Provider>
   );
 };
 
-const Socket = (props: { id: string | null }) => {
+const Socket = (props: { id: string | null, rep: Replicache }) => {
   let socket = useRef<WebSocket>();
-  let rep = useReplicache();
   useEffect(() => {
     if (!props.id) return;
     socket.current = new WebSocket(
       `${process.env.NEXT_PUBLIC_WORKER_SOCKET}/v0/activity/${props.id}/poke`
     );
     socket.current.addEventListener("message", () => {
-      rep.pull();
+      props.rep.pull();
     });
     return () => {
       socket.current?.close();

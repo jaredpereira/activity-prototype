@@ -31,14 +31,17 @@ export default function StudioPage() {
 }
 
 const Activity = (props: { id: string; activityId: string }) => {
-  let router = useRouter();
-  let name = useFact("eav", `${props.id}-name`)[0];
-  if (!name) return null;
+  let uniqueName = useFact("eav", `${props.id}-name`)[0];
+  let studio = useFact("eav", `${props.id}-activity/studio`)[0]
+  let activityName = useFact("eav", `${props.id}-activity/name`)[0];
+  let external = useFact('eav', `${props.id}-activity/external`)[0]
+  let name = external?.value.value ? activityName?.value.value : uniqueName?.value.value
+  if (!name && !activityName) return null;
   return (
-    <Link href={`/s/${router.query.studio}/a/${name.value.value}`}>
+    <Link href={`/s/${studio?.value.value}/a/${name}`}>
       <a className="">
         <div className="p-4 rounded-md bg-white shadow-drop border-[1px] border-grey-55 max-w-sm w-max">
-          <h3 className="text-xl font-bold ">{name.value.value}</h3>
+          <h3 className="text-xl font-bold ">{name}</h3>
         </div>
       </a>
     </Link>

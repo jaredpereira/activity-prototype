@@ -84,12 +84,17 @@ const DefaultAttributes = {
     unique: false,
     cardinality: "one",
   },
-  activity: {
+  ["activity/studio"]: {
+    type: "string",
+    unique: false,
+    cardinality: "one",
+  },
+  ["activity/id"]: {
     type: "string",
     unique: true,
     cardinality: "one",
   },
-  external: {
+  ["activity/external"]: {
     type: "boolean",
     unique: false,
     cardinality: "one",
@@ -101,7 +106,7 @@ const DefaultAttributes = {
   },
   "activity/name": {
     type: "string",
-    unique: true,
+    unique: false,
     cardinality: "one",
   },
   "member/name": {
@@ -109,6 +114,11 @@ const DefaultAttributes = {
     type: "string",
     cardinality: "one",
   },
+  "this/name": {
+    unique: true,
+    type: 'string',
+    cardinality: "one"
+  }
 } as const;
 
 export const Attributes = { ...DefaultAttributes, ...BaseAttributes };

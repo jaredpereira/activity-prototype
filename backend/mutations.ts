@@ -240,8 +240,8 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-                eav: generateKeyBetween(null, null),
-              }
+              eav: generateKeyBetween(null, null),
+            }
             : {},
       });
     },
@@ -297,8 +297,8 @@ const addNewSection: Mutation<{
         positions:
           args.type === "cards"
             ? {
-                eav: generateKeyBetween(null, null),
-              }
+              eav: generateKeyBetween(null, null),
+            }
             : {},
       });
     },
@@ -343,39 +343,102 @@ const addNewDeck: Mutation<{ name: string; id: string; position: string }> = (
   };
 };
 
-const joinActivity: Mutation<{ user: string; newEntity: string }> = (args) => {
+const addActivity: Mutation<{
+  activityID: string;
+  studio: string;
+  name: string;
+  entityID: string;
+}> = (args) => {
   return {
     client: async (tx) => {
-      return clientAssert(tx, {
-        entity: args.newEntity,
-        attribute: "activity/member",
-        positions: {},
-        value: {
-          type: "string",
-          value: args.user,
-        },
-      });
+      return Promise.all([
+        clientAssert(tx, {
+          entity: args.entityID,
+          attribute: "activity/name",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.name,
+          },
+        }),
+        clientAssert(tx, {
+          entity: args.entityID,
+          attribute: "activity/studio",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.studio,
+          },
+        }),
+        clientAssert(tx, {
+          entity: args.entityID,
+          attribute: "activity/id",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.activityID,
+          },
+        }),
+        clientAssert(tx, {
+          entity: args.entityID,
+          attribute: "activity/external",
+          positions: {},
+          value: {
+            type: "boolean",
+            value: true,
+          },
+        }),
+      ])
     },
     server: async (tx) => {
-      return serverAssertFact(tx, {
-        entity: args.newEntity,
-        attribute: "activity/member",
-        positions: {},
-        value: {
-          type: "string",
-          value: args.user,
-        },
-      });
+      return Promise.all([
+        serverAssertFact(tx, {
+          entity: args.entityID,
+          attribute: "activity/name",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.name,
+          },
+        }),
+        serverAssertFact(tx, {
+          entity: args.entityID,
+          attribute: "activity/studio",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.studio,
+          },
+        }),
+        serverAssertFact(tx, {
+          entity: args.entityID,
+          attribute: "activity/id",
+          positions: {},
+          value: {
+            type: "string",
+            value: args.activityID,
+          },
+        }),
+        serverAssertFact(tx, {
+          entity: args.entityID,
+          attribute: "activity/external",
+          positions: {},
+          value: {
+            type: "boolean",
+            value: true,
+          },
+        }),
+      ])
     },
   };
 };
 
 export const Mutations = {
   createNewCard,
+  addActivity,
   addNewDeck,
   addNewSection,
   addCardToSection,
-  joinActivity,
   assertFact,
   deleteCard,
   updatePosition,

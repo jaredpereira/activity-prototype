@@ -2,7 +2,7 @@ import "../styles/globals.css";
 import type { AppProps } from "next/app";
 import React from "react";
 import Link from "next/link";
-import { ReplicacheProvider } from "../src/useReplicache";
+import { HomeStudioProvider, ReplicacheProvider } from "../src/useReplicache";
 import { useAuthentication } from "backend/auth";
 import { LoginForm } from "src/components/LoginForm";
 import { useRouter } from "next/router";
@@ -16,19 +16,23 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   if (router.pathname === "/s/[studio]")
     return (
-      <StudioProvider>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-      </StudioProvider>
+      <HomeStudioProvider>
+        <StudioProvider>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </StudioProvider>
+      </HomeStudioProvider>
     );
   if (router.pathname.startsWith("/s/[studio]/a/[activity]"))
     return (
-      <ActivityProvider>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
-      </ActivityProvider>
+      <HomeStudioProvider>
+        <ActivityProvider>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </ActivityProvider>
+      </HomeStudioProvider>
     );
 
   return (
@@ -115,9 +119,7 @@ const Layout: React.FC = (props) => {
       }}
       className="bg-background"
     >
-      <div className='overflow-y-scroll h-full'>
-        {props.children}
-      </div>
+      <div className="overflow-y-scroll h-full">{props.children}</div>
       <Nav />
     </div>
   );
@@ -126,7 +128,6 @@ const Layout: React.FC = (props) => {
 function Nav() {
   let { data: auth } = useAuthentication();
   let router = useRouter();
-  console.log(router);
   if (!router.pathname.startsWith("/s/[studio]/a/[activity]")) return null;
   return (
     <div

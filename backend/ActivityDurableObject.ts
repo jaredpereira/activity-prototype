@@ -54,9 +54,7 @@ export class ActivityDurableObject implements DurableObject {
       let lastVersion =
         (await this.state.storage.get<number>("meta-lastVersion")) || 0;
       let shareLink = await this.state.storage.get("meta-shareLink");
-      console.log(shareLink);
       if (!shareLink) shareLink = generateShareCode();
-      console.log(shareLink);
       if (lastVersion >= this.version) return;
       await this.state.storage.deleteAll();
       this.state.storage.put("meta-lastVersion", this.version);
@@ -85,18 +83,28 @@ export class ActivityDurableObject implements DurableObject {
         );
       }
       case "join": {
-        let data: { code: string } = await request.json()
-        let user = getToken(request)
-        if (!user) return new Response(JSON.stringify({ errors: ["No user logged in"] }), { status: 401 })
+        let data: { code: string } = await request.json();
+        let user = getToken(request);
+        if (!user)
+          return new Response(
+            JSON.stringify({ errors: ["No user logged in"] }),
+            { status: 401 }
+          );
         let code = await this.state.storage.get<string>("meta-shareLink");
-        if (!code) return new Response(JSON.stringify({ errors: ['no saved code'] }), { status: 500 })
-        if (data.code = code) {
-          this.addMember({ id: user.studio, name: user.username })
-          this.sendPoke()
-          return new Response(JSON.stringify({}))
+        if (!code)
+          return new Response(JSON.stringify({ errors: ["no saved code"] }), {
+            status: 500,
+          });
+        if ((data.code = code)) {
+          this.addMember({ id: user.studio, name: user.username });
+          this.sendPoke();
+          return new Response(
+            JSON.stringify({ activity: this.state.id.toString() })
+          );
         }
-        return new Response(JSON.stringify({ errors: ['invalid code'] }), { status: 401 })
-
+        return new Response(JSON.stringify({ errors: ["invalid code"] }), {
+          status: 401,
+        });
       }
 
       case "share": {
@@ -144,21 +152,23 @@ export class ActivityDurableObject implements DurableObject {
       this.addMember({ id: data.creatorID, name: data.creatorName }),
       serverAssertFact(this.state.storage, {
         entity: ulid(),
-        attribute: "activity/name",
+        attribute: "this/name",
         positions: { aev: "a0" },
         value: {
           type: "string",
           value: data.name,
         },
       }),
-    ])
+    ]);
     await this.state.storage.put("meta-creator", data.creatorID);
     return new Response(JSON.stringify([]), { status: 200 });
   }
 
-  async addMember(member: { id: string, name: string }) {
-    let existingMember = await this.query.attribute('activity/member').find(member.id)
-    if (existingMember) return
+  async addMember(member: { id: string; name: string }) {
+    let existingMember = await this.query
+      .attribute("activity/member")
+      .find(member.id);
+    if (existingMember) return;
     let memberEntity = ulid();
     await Promise.all([
       serverAssertFact(this.state.storage, {
@@ -182,7 +192,7 @@ export class ActivityDurableObject implements DurableObject {
   async getActitivy(name: string) {
     let entity = await this.query.attribute("name").find(name);
     if (!entity) return new Response(JSON.stringify({}), { status: 404 });
-    let activity = await this.query.entity(entity.entity).get("activity");
+    let activity = await this.query.entity(entity.entity).get("activity/id");
     if (!activity) return new Response(JSON.stringify({}), { status: 404 });
     return new Response(activity.value.value, {
       status: 200,
@@ -198,7 +208,6 @@ export class ActivityDurableObject implements DurableObject {
       );
 
     let user = getToken(request);
-    console.log(user);
     if (!(await this.isAuthorized(request)) || !user)
       return new Response(JSON.stringify({ errors: ["unauthorized"] }), {
         status: 400,
@@ -230,7 +239,13 @@ export class ActivityDurableObject implements DurableObject {
       }),
       serverAssertFact(this.state.storage, {
         entity: newEntity,
-        attribute: "activity",
+        attribute: "activity/studio",
+        value: { type: "string", value: user.username },
+        positions: {}
+      }),
+      serverAssertFact(this.state.storage, {
+        entity: newEntity,
+        attribute: "activity/id",
         value: { type: "string", value: newActivity.toString() },
         positions: {},
       }),
@@ -246,7 +261,7 @@ export class ActivityDurableObject implements DurableObject {
       .attribute("activity/member")
       .find(user.studio);
     if (!userIsMember) return false;
-    return true
+    return true;
   }
 
   async pull(request: Request): Promise<Response> {
