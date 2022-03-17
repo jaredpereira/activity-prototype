@@ -1,3 +1,4 @@
+import { useAuthentication } from "backend/auth";
 import { AttributeName } from "backend/query";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { Replicache, WriteTransaction } from "replicache";
@@ -18,23 +19,31 @@ let mutators: ReplicacheMutators = Object.keys(Mutations).reduce((acc, k) => {
   return acc;
 }, {} as any);
 
-let ReplicacheContext = createContext<Replicache<ReplicacheMutators> | null>(
-  null
-);
+let ReplicacheContext = createContext<{
+  rep: Replicache<ReplicacheMutators> | null;
+  activityURL: string
+} | null>(null);
 
 const NEXT_PUBLIC_WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL;
 export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
   props
 ) => {
   let [rep, setRep] = useState<Replicache<ReplicacheMutators> | null>(null);
+  let activityURL = `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}`
   useEffect(() => {
     if (!props.activity) return;
     const rep = new Replicache({
       name: `activity-${props.activity}`,
       schemaVersion: `27`,
       pushDelay: 500,
-      pullURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}/pull`,
-      pushURL: `${NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.activity}/push`,
+      pullURL: `${activityURL}/pull`,
+      pushURL: `${activityURL}/push`,
+      pusher: async (req) => {
+        let res = await fetch(req, {
+          credentials: "include",
+        });
+        return { httpStatusCode: res.status, errorMessage: "" };
+      },
       puller: async (req) => {
         let res = await fetch(req);
         let data: MyPullResponse = await res.json();
@@ -74,7 +83,7 @@ export const ReplicacheProvider: React.FC<{ activity: string | null }> = (
   }, [props.activity]);
 
   return (
-    <ReplicacheContext.Provider value={rep}>
+    <ReplicacheContext.Provider value={{ rep, activityURL }}>
       {!rep ? null : <Socket id={props.activity} />}
       {!rep ? "loading" : props.children}
     </ReplicacheContext.Provider>
@@ -101,20 +110,64 @@ const Socket = (props: { id: string | null }) => {
 
 export const useReplicache = () => {
   const c = useContext(ReplicacheContext);
-  if (c === null)
+  if (c === null || c.rep === null)
     throw new Error("useCtx must be inside a Provider with a value");
-  return c;
+  return c.rep;
 };
 
-export const useFact = (index: string, prefix: string) => {
+export const useActivityURL = () => {
+  const c = useContext(ReplicacheContext);
+  if (c === null || c.rep === null)
+    throw new Error("useCtx must be inside a Provider with a value");
+  return c.activityURL;
+};
+
+export function useFact<A extends AttributeName = AttributeName>(
+  index: string,
+  prefix: string
+) {
   let rep = useReplicache();
   return useSubscribe(
     rep,
     async (tx) => {
-      if (!prefix) return [] as Fact<AttributeName>[];
+      if (!prefix) return [] as Fact<A>[];
       return tx.scan({ indexName: index, prefix }).values().toArray();
     },
     [],
     [index, prefix]
   ) as Fact<AttributeName>[];
-};
+}
+
+export function useMutation() {
+  let { data: user } = useAuthentication();
+  let rep = useReplicache();
+  let auth = useSubscribe(
+    rep,
+    async (tx) => {
+      if (!user || !user.loggedIn) return false;
+      let fact = (await tx
+        .scan({
+          indexName: "ave",
+          prefix: `activity/member-${user.token.studio}`,
+        })
+        .values()
+        .toArray()) as Fact<"activity/member">[];
+      if (!fact[0]) return false;
+      return true;
+    },
+    false,
+    [user]
+  );
+
+  return {
+    authorized: auth,
+    mutate<T extends keyof typeof Mutations>(
+      mutation: T,
+      args: Parameters<typeof Mutations[T]>[0]
+    ) {
+      if (!user || !auth) return;
+      //@ts-ignore
+      return rep.mutate[mutation](args);
+    },
+  };
+}

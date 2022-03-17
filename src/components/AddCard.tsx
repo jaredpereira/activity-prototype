@@ -2,17 +2,17 @@ import { useRouter } from "next/router";
 import React from "react";
 import { NewCard } from "src/Icons";
 import { ulid } from "src/ulid";
-import { useReplicache } from "src/useReplicache";
+import { useMutation, useReplicache } from "src/useReplicache";
 
 export const AddCardButton = (props: {
   entityID: string;
   position: string;
 }) => {
-  let rep = useReplicache();
   let router = useRouter();
+  let { mutate, authorized } = useMutation();
   const addCard = async () => {
     let newCard = ulid();
-    await rep.mutate.addCardToSection({
+    await mutate("addCardToSection", {
       newCard,
       entity: props.entityID,
       section: "contains",
@@ -24,6 +24,7 @@ export const AddCardButton = (props: {
   };
   return (
     <button
+      disabled={!authorized}
       onClick={() => addCard()}
       className="text-accent-blue w-fit font-bold grid items-center grid-flow-col gap-1"
     >

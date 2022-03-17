@@ -96,12 +96,17 @@ const DefaultAttributes = {
   },
   "activity/member": {
     type: "string",
-    unique: false,
+    unique: true,
     cardinality: "one",
   },
   "activity/name": {
     type: "string",
     unique: true,
+    cardinality: "one",
+  },
+  "member/name": {
+    unique: true,
+    type: "string",
     cardinality: "one",
   },
 } as const;
@@ -137,10 +142,10 @@ export async function init(tx: DurableObjectStorage) {
         write("type", attribute.type, BaseAttributes.type),
         attribute.type === "union"
           ? Promise.all(
-              attribute["union/value"].map((v) =>
-                write("union/value", v, BaseAttributes["union/value"])
-              )
+            attribute["union/value"].map((v) =>
+              write("union/value", v, BaseAttributes["union/value"])
             )
+          )
           : null,
       ]);
     })

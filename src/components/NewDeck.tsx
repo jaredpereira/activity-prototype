@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { NewDeck as NewDeckIcon } from "src/Icons";
 import { ulid } from "src/ulid";
-import { useReplicache } from "src/useReplicache";
+import { useMutation } from "src/useReplicache";
 
 export const NewDeck = (props: { position: string }) => {
   let [state, setState] = useState({ open: false, name: "" });
-  let rep = useReplicache();
+  let { mutate, authorized } = useMutation();
+  console.log(authorized);
   if (!state.open)
     return (
       <button
-        onClick={() => setState({ ...state, open: true })}
+        disabled={!authorized}
+        onClick={() => (authorized ? setState({ ...state, open: true }) : null)}
         className="text-accent-blue  border-2 border-accent-blue grid justify-items-center rounded-md py-3 w-full"
       >
         <div className="justify-self-center grid grid-flow-col gap-2 ">
@@ -20,7 +22,7 @@ export const NewDeck = (props: { position: string }) => {
 
   const create = () => {
     let newDeck = ulid();
-    rep.mutate.addNewDeck({
+    mutate("addNewDeck", {
       name: state.name,
       id: newDeck,
       position: props.position,

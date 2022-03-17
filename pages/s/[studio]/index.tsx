@@ -61,6 +61,7 @@ const CreateActivity = (props: { studioID: string }) => {
           await fetch(
             `${process.env.NEXT_PUBLIC_WORKER_URL}/v0/activity/${props.studioID}/activity`,
             {
+              credentials: "include",
               method: "POST",
               body: JSON.stringify({ name: newActivity }),
               headers: {

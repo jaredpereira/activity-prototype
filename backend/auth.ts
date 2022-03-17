@@ -1,5 +1,6 @@
 import cookie from "cookie";
 import useSWR from "swr";
+import { InitMessage } from "./ActivityDurableObject";
 import { Bindings } from "./bindings";
 
 export type Token = {
@@ -63,9 +64,10 @@ export async function handleLoginRequest(request: Request, env: Bindings) {
     let newID = env.ACTIVITY.newUniqueId();
     studio = newID.toString();
     let stub = env.ACTIVITY.get(newID);
+    let data: InitMessage = { name: body.username, creatorID: studio, creatorName: body.username }
     await stub.fetch("http://internal/init", {
       method: "POST",
-      body: JSON.stringify({ name: body.username, creator: studio }),
+      body: JSON.stringify(data),
     });
     env.usernames_to_studios.put(body.username, studio);
   }
@@ -83,12 +85,12 @@ export async function handleLogoutRequest(_request: Request, _env: Bindings) {
 
 export type Session =
   | {
-      loggedIn: false;
-    }
+    loggedIn: false;
+  }
   | {
-      loggedIn: true;
-      token: Token;
-    };
+    loggedIn: true;
+    token: Token;
+  };
 
 export async function handleSessionRequest(request: Request, _env: Bindings) {
   let token = getToken(request);
